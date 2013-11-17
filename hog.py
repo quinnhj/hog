@@ -195,15 +195,17 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
 
 
 
-pic = misc.imread('greypig.png', flatten=True)
+pic = misc.imread('hogscent.jpg', flatten=True)
+
+
+
+for i in range(20):
+    print pic[i][0]
+
+
 ret = hog(pic)
 print ret
 print ret.shape
 
 np.savetxt('output.txt', ret)
-
-
-
-
-
 
