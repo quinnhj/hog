@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
     // Merge up
     for (int i = 0; i < width; i++) {
         for (int j = 1; j < height; j++) {
-            gx[j*width + i] = pixels[j*width + i] - pixels[(j-1)*width + i];
+            gy[j*width + i] = pixels[j*width + i] - pixels[(j-1)*width + i];
         }
     }
     printf("%f", gx[rand() % 10]);
