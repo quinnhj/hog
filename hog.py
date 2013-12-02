@@ -99,7 +99,7 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
     magnitude = sqrt(gx ** 2 + gy ** 2)
     orientation = arctan2(gy, (gx + 1e-15)) * (180 / pi) % 180
 
-    sx, sy = image.shape
+    sy, sx = image.shape
     cx, cy = pixels_per_cell
     bx, by = cells_per_block
 

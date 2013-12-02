@@ -7,8 +7,11 @@
 #include <time.h>
 #include <omp.h>
 #include <math.h>
+#include <iostream>
+#include <fstream>
 
 #include "readjpeg.h"
+using namespace std;
 
 typedef struct
 {
@@ -79,6 +82,37 @@ void convert_to_frame(frame_ptr out, pixel_t *in)
 }
 
 
+void uniform_filter(float *in, float *out, int width, int height, int cx, int cy) {
+    int divisor = (float) cx * cy;
+    int yval, xval;
+
+    //printf("At beginning of uniform filter\n");
+
+    for (int i = 0; i < width; i++) {
+        for (int j = 0; j < height; j++) {
+
+            for (int a = cx * -1; a <= cx; a++) {
+                for (int b = cy * -1; b <= cy; b++) {
+                    
+                    xval = i + a;
+                    if (i+a < 0) xval = 0;
+                    if (i+a >= width) xval = width - 1;
+                    
+                    yval = j + b;
+                    if (j+b < 0) yval = 0;
+                    if (j+b >= height) yval = height - 1;
+                   
+                    //printf("Calculated x and y val. xval = %d, yval = %d\n", xval, yval);
+                    out[yval*width + xval] += in[j*width + i] / divisor;
+
+                }
+            }
+        //printf("i = %d, j = %d\n", i, j);
+        }
+    }
+}
+
+
 
 int main(int argc, char *argv[])
 {
@@ -96,6 +130,11 @@ int main(int argc, char *argv[])
     int nthreads = 1;
 
     srand(5);
+
+    
+    int num_timestamps = 7;
+    double timestamps[num_timestamps];
+
 
     while((c = getopt(argc, argv, "i:n:o:t:"))!=-1)
     {
@@ -123,6 +162,9 @@ int main(int argc, char *argv[])
         printf("need input filename and output filename\n");
         return -1;
     }
+
+
+    timestamps[0] = timestamp();
 
     frame = read_JPEG_file(inName);
     if(!frame)
@@ -176,11 +218,13 @@ int main(int argc, char *argv[])
     float *hist = new float[n_cellsx*n_cellsy*num_orientations];
     bzero(hist, sizeof(float)*n_cellsx*n_cellsy*num_orientations);
 
-    // Compute rest of convolution
+    // Temparray for rest of convolution
     float *temparr = new float[width*height];
+    float *tempoutarr = new float[width*height];
  
- 
-    // Convert to grayscale and normalize
+    timestamps[1] = timestamp();
+
+    printf("Starting Computations.\n"); 
 
     /*
      * Fix loop ordering.
@@ -192,14 +236,20 @@ int main(int argc, char *argv[])
      *
     */
 
+
+    // Convert to grayscale and normalize
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < height; j++) {
             pixels[j*width + i] = sqrtf(rgb_to_grayscale(inPix[j*width + i]));
         }
     }
 
+    timestamps[2] = timestamp();
+
+    printf("Successfully converted grayscale\n");
     printf("%f", pixels[rand() % 10]);
-    
+    printf("Finished printing out random val1\n");
+     
     // fill out gx and gy
     // gx
     // Merge up
@@ -216,31 +266,39 @@ int main(int argc, char *argv[])
             gy[j*width + i] = pixels[j*width + i] - pixels[(j-1)*width + i];
         }
     }
+
+    timestamps[3] = timestamp();
+
     printf("%f", gx[rand() % 10]);
     printf("%f", gy[rand() % 10]);
+    printf("Finished calculating gx and gy\n");
 
     // Merge up
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < height; j++) {
             magnitude[j*width+i] = sqrtf(powf(gx[j*width+i], 2) + powf(gy[j*width+i], 2));
-            orientation[j*width+i] = atan2f(gy[j*width+i], gx[j*width+i] + 0.0000000001)
-                    * (180 / 3.14159265) + 90;
+            orientation[j*width+i] = fmod(atan2f(gy[j*width+i], gx[j*width+i] + 0.0000000001)
+                    * (180 / 3.14159265), 180);
         }
     }
+
+    timestamps[4] = timestamp();
+
     printf("%f", magnitude[rand() % 10]);
     printf("%f", orientation[rand() % 10]);
-
+    printf("Finished calculating mag/orientation\n");
            
     // Move K into loop -- only do one nested for loop.
     // Needs to have block normalization inside, write to output array.
     for (int k = 0; k < num_orientations; k++) {
         bzero(temparr, sizeof(float)*width*height);
+        bzero(tempoutarr, sizeof(float)*width*height);
 
         for (int i = 0; i < width; i++) {
-            for (int j = 0; i < height; j++) {
+            for (int j = 0; j < height; j++) {
                 bool in_bin = orientation[j*width + i] < ((180 / num_orientations)
                         * (k + 1));
-                bool in_bin = in_bin && orientation[j*width + i] >=
+                in_bin = in_bin && orientation[j*width + i] >=
                         ((180 / num_orientations) * k);
 
                 if (in_bin) {
@@ -248,33 +306,79 @@ int main(int argc, char *argv[])
                 }
             }
         }
-        
-        uniform_filter(&temparr, cx, cy);
+        uniform_filter(temparr, tempoutarr, width, height, cx, cy);
 
         for (int i = 0; i < n_cellsx; i++) {
-            for (int j = 0; i < n_cellsy; j++) {
+            for (int j = 0; j < n_cellsy; j++) {
                 int xval = cx/2 + cx*i;
                 int yval = cy/2 + cy*j;
-                hist[k*n_cellsx*n_cellsy + i*n_cellsx + j] = temparr[yval*width + xval];
+                //printf("i = %d, j = %d, xval = %d, yval = %d, w=%d, h=%d, ncx=%d, ncy=%d\n",
+                        // i, j, xval, yval, width, height, n_cellsx, n_cellsy);
+                hist[k*n_cellsx*n_cellsy + i*n_cellsx + j] = tempoutarr[yval*width + xval];
             }
         }
     }
 
-    double t0 = timestamp();
+    timestamps[5] = timestamp();
+
+    int n_blocksx = (n_cellsx - bx) + 1;
+    int n_blocksy = (n_cellsy - by) + 1;
+    int block_arr_size = n_blocksx*n_blocksy*by*bx*num_orientations;
+    float *blocks = new float[block_arr_size];
+    bzero(blocks, sizeof(float)*block_arr_size);
+
+    //Normalizing into flat block array
+    float b_val;
+    for (int i = 0; i < n_blocksx; i++) {
+        for (int j = 0; j < n_blocksy; j++) {
+           
+            
+            
+            //Didn't finish yet
+
+        }
+    }
+
+    timestamps[6] = timestamp();
+
     omp_set_num_threads(nthreads);
     int flops = 0;
-
-    t0 = timestamp() - t0;
-    printf("%g sec\n", t0);
-    printf("%d flops\n", flops);
     convert_to_frame(frame, outPix);
 
     write_JPEG_file(outName,frame,75);
     destroy_frame(frame);
 
+    //Saving to text file:
+    ofstream file;
+    file.open("output/cpp_out.txt");
+    for (int i = 0; i < block_arr_size; i++) {
+        file << blocks[i];
+        file << "\n";
+    }
+    file.close();
+
+    //Print timestamping data:
+    printf("Timestamps:\n\n");
+    double total_time = timestamps[num_timestamps-1] - timestamps[0];
+    printf("Total time: %f seconds\n", total_time);
+    for (int i = 1; i < num_timestamps; i++) {
+        printf("%d: %f\n", i, timestamps[i]);
+        printf("\t%f percent\n", ((timestamps[i] - timestamps[i-1]) / total_time) * 100);
+    }
+
+
+
+
     delete [] blur_radii;
     delete [] inPix; 
     delete [] outPix;
+    delete [] hist;
+    delete [] orientation;
+    delete [] temparr;
+    delete [] tempoutarr;
+    delete [] magnitude;
+    delete [] gx;
+    delete [] gy;
     return 0;
 }
 
