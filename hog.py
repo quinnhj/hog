@@ -97,7 +97,7 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
     """
 
     magnitude = sqrt(gx ** 2 + gy ** 2)
-    orientation = arctan2(gy, (gx + 1e-15)) * (180 / pi) + 90
+    orientation = arctan2(gy, (gx + 1e-15)) * (180 / pi) % 180
 
     sx, sy = image.shape
     cx, cy = pixels_per_cell
@@ -107,17 +107,18 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
     n_cellsy = int(np.floor(sy // cy))  # number of cells in y
 
     # compute orientations integral images
-    orientation_histogram = np.zeros((n_cellsx, n_cellsy, orientations))
+    orientation_histogram = np.zeros((n_cellsy, n_cellsx, orientations))
+    subsample = np.index_exp[cy / 2:cy * n_cellsy:cy, cx / 2:cx * n_cellsx:cx]
     for i in range(orientations):
         #create new integral image for this orientation
         # isolate orientations in this range
 
         temp_ori = np.where(orientation < 180 / orientations * (i + 1),
-                            orientation, 0)
+                            orientation, -1)
         temp_ori = np.where(orientation >= 180 / orientations * i,
-                            temp_ori, 0)
+                            temp_ori, -1)
         # select magnitudes for those orientations
-        cond2 = temp_ori > 0
+        cond2 = temp_ori > -1
         temp_mag = np.where(cond2, magnitude, 0)
 
         '''
@@ -127,15 +128,16 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
         print "cy = " + str(cy)
         '''
 
-
-        orientation_histogram[:,:,i] = uniform_filter(temp_mag, size=(cx, cy))[cx/2::cx, cy/2::cy].T
-
+        temp_filt = uniform_filter(temp_mag, size=(cy, cx))
+        #orientation_histogram[:,:,i] = uniform_filter(temp_mag, size=(cx, cy))[cx/2::cx, cy/2::cy].T
+        orientation_histogram[:, :, i] = temp_filt[subsample]
 
     # now for each cell, compute the histogram
     #orientation_histogram = np.zeros((n_cellsx, n_cellsy, orientations))
 
     radius = min(cx, cy) // 2 - 1
     hog_image = None
+    
     if visualise:
         hog_image = np.zeros((sy, sx), dtype=float)
 
@@ -148,9 +150,18 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
                     centre = tuple([y * cy + cy // 2, x * cx + cx // 2])
                     dx = radius * cos(float(o) / orientations * np.pi)
                     dy = radius * sin(float(o) / orientations * np.pi)
-                    rr, cc = draw.bresenham(centre[0] - dx, centre[1] - dy,
+                    
+                    '''
+                    rr, cc = draw.line(centre[0] - dx, centre[1] - dy,
                                             centre[0] + dx, centre[1] + dy)
-                    hog_image[rr, cc] += orientation_histogram[x, y, o]
+                    '''
+                    
+                    rr, cc = draw.line(int(centre[0] - dx),
+                                       int(centre[1] - dy),
+                                       int(centre[0] + dx),
+                                       int(centre[1] + dy))
+                    
+                    hog_image[rr, cc] += orientation_histogram[y, x, o]
 
     """
     The fourth stage computes normalisation, which takes local groups of
@@ -169,12 +180,12 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
 
     n_blocksx = (n_cellsx - bx) + 1
     n_blocksy = (n_cellsy - by) + 1
-    normalised_blocks = np.zeros((n_blocksx, n_blocksy,
-                                  bx, by, orientations))
+    normalised_blocks = np.zeros((n_blocksy, n_blocksx,
+                                  by, bx, orientations))
 
     for x in range(n_blocksx):
         for y in range(n_blocksy):
-            block = orientation_histogram[x:x + bx, y:y + by, :]
+            block = orientation_histogram[y:y + by, x:x + bx, :]
             eps = 1e-5
             normalised_blocks[x, y, :] = block / sqrt(block.sum() ** 2 + eps)
 
@@ -198,14 +209,15 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
 pic = misc.imread('hogscent.jpg', flatten=True)
 
 
-
+'''
 for i in range(20):
     print pic[i][0]
+'''
 
-
-ret = hog(pic)
+ret, vis = hog(pic, visualise=True)
 print ret
 print ret.shape
 
-np.savetxt('output.txt', ret)
+np.savetxt('output/py_out.txt', ret)
+misc.imsave('output/py_img.png', vis)
 
