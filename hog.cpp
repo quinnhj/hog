@@ -88,6 +88,8 @@ void convert_to_frame(frame_ptr out, pixel_t *in)
 }
 
 
+/* Unneeded
+ *
 void uniform_filter(float *in, float *out, int width, int height, int cx, int cy) {
     float divisor = (float) cx * cy;
     int yval, xval;
@@ -108,15 +110,6 @@ void uniform_filter(float *in, float *out, int width, int height, int cx, int cy
                     if (j+b < 0) yval = -1*yval - 1;
                     if (j+b >= height) yval = 2*height - yval - 1;
                   
-                  
-                    /* 
-                    if (i == 0 && j == 0) {
-                        printf("count = %d, a = %d, b = %d, val = %f, xval = %d, yval = %d\n", 
-                                    count++, a, b, in[j*width + i] / divisor,
-                                    xval, yval);      
-                    }
-                    */
-                   
                     //printf("Calculated x and y val. xval = %d, yval = %d\n", xval, yval);
                     out[yval*width + xval] += (in[j*width + i] / divisor);
 
@@ -126,6 +119,7 @@ void uniform_filter(float *in, float *out, int width, int height, int cx, int cy
         }
     }
 }
+*/
 
 void image_to_hist (float *image, float *hist, int width, int height,
                     int cx, int cy, int n_cellsx, int n_cellsy, int num_orientations) {
@@ -449,8 +443,6 @@ int main(int argc, char *argv[])
     int n_blocksy = (n_cellsy - by) + 1;
     int block_arr_size = n_blocksx*n_blocksy*by*bx*num_orientations;
     float *normalised_blocks = new float[block_arr_size];
-    //float *block = new float[bx*by*num_orientations];
-    //bzero(block, sizeof(float)*bx*by*num_orientations);
     bzero(normalised_blocks, sizeof(float)*block_arr_size);
 
     //Normalizing into flat block array
@@ -460,9 +452,12 @@ int main(int argc, char *argv[])
     int counter_y = 0;
     float arr_sum = 0;
     //k = orientation, i = block_x, j = block_y
-    for (int k = 0; k < num_orientations; k++) {
+    
+    /*
+    
+    for (int j = 0; j < n_blocksy; j++) {
         for (int i = 0; i < n_blocksx; i++) {
-            for (int j = 0; j < n_blocksy; j++) {
+            for (int k = 0; k < num_orientations; k++) {
                 //summation
                 arr_sum = 0;
                 for (int x = i; x < i + bx; x++) {
@@ -483,6 +478,40 @@ int main(int argc, char *argv[])
             }
         }
     }
+
+    */
+
+    int block_size = by * bx * num_orientations;
+    for (int j = 0; j < n_blocksy; j++) {
+        for (int i = 0; i < n_blocksx; i++) {
+            arr_sum = 0;
+
+            for (int ay = 0; ay < by; ay++) {
+                for (int ax = 0; ax < bx; ax++) {
+                    for (int k = 0; k < num_orientations; k++) {
+                        arr_sum += hist[(j+ay)*n_cellsx*num_orientations
+                                    + (i+ax)*num_orientations + k];
+                    }
+                }
+            }
+
+            for (int ay = 0; ay < by; ay++) {
+                for (int ax = 0; ax < bx; ax++) {
+                    for (int k = 0; k < num_orientations; k++) {
+                        normalised_blocks[j*n_blocksx*block_size +
+                                    i*block_size + ay*bx*num_orientations
+                                    + ax*num_orientations + k] =
+
+                        hist[(j+ay)*n_cellsx*num_orientations
+                                + (i+ax)*num_orientations + k] / sqrtf(powf(arr_sum, 2) + eps);
+                    }
+                }
+            }
+            //printf("i: %d, j: %d, arr_sum: %f\n", i, j, arr_sum);
+
+        }
+    }
+
 
     //Flatten
 
