@@ -38,13 +38,19 @@ float lin_to_rgb(float y) {
 }
 
 float rgb_to_grayscale(pixel_t input){
-    
+   
+    /*
     float r_lin = rgb_to_lin(input.r/255.0);
     float g_lin = rgb_to_lin(input.g/255.0);
     float b_lin = rgb_to_lin(input.b/255.0);
     float gray_lin = 0.2126 * r_lin + 0.7152 * g_lin + 0.0722 * b_lin;
-
+    
     return roundf(lin_to_rgb(gray_lin) * 255);
+    */
+
+    //return (input.r + input.g + input.b) / 3.0;
+    return 0.299*input.r + 0.587*input.g + 0.114*input.b;
+
 }
 
 
@@ -91,8 +97,8 @@ void uniform_filter(float *in, float *out, int width, int height, int cx, int cy
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < height; j++) {
 
-            for (int a = cx * -1; a <= cx; a++) {
-                for (int b = cy * -1; b <= cy; b++) {
+            for (int a = (-1*ceil(cx/2)) + 1; a <= cx/2; a++) {
+                for (int b = (-1*ceil(cy/2)) + 1; b <= cy/2; b++) {
                     
                     xval = i + a;
                     if (i+a < 0) xval = 0;
@@ -159,13 +165,13 @@ void image_to_hist (float *image, float *hist, int width, int height,
             
             // Step 1, calculating gx and gy
             if (i != 0) {
-                gx = image[j*width + i] - image[j*width + i - 1]
+                gx = image[j*width + i] - image[j*width + i - 1];
             } else {
                 gx = 0.0;
             }
 
             if (j != 0) {
-                gy = image[j*width + i] - image[(j-1) * width + i]
+                gy = image[j*width + i] - image[(j-1) * width + i];
             } else {
                 gx = 0.0;
             }
@@ -338,17 +344,22 @@ int main(int argc, char *argv[])
     // fill out gx and gy
     // gx
     // Merge up
-    for (int i = 1; i < width; i++) {
+    //for (int i = 1; i < width; i++) {
+    for (int i = 0; i < width - 1; i++) {
         for (int j = 0; j < height; j++) {
-            gx[j*width + i] = pixels[j*width + i] - pixels[j*width + i - 1];
+            //gx[j*width + i] = pixels[j*width + i] - pixels[j*width + i - 1];
+            gx[j*width + i] = pixels[j*width + i + 1] - pixels[j*width + i];
+
+
         }
     }
 
     // gy
     // Merge up
     for (int i = 0; i < width; i++) {
-        for (int j = 1; j < height; j++) {
-            gy[j*width + i] = pixels[j*width + i] - pixels[(j-1)*width + i];
+        for (int j = 0; j < height - 1; j++) {
+        //for (int j = 1; j < height; j++) {
+            gy[j*width + i] = pixels[(j+1)*width + i] - pixels[j*width + i];
         }
     }
 
@@ -359,11 +370,15 @@ int main(int argc, char *argv[])
     printf("Finished calculating gx and gy\n");
 
     // Merge up
+    float small_num = 0.0000000000000001f;
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < height; j++) {
             magnitude[j*width+i] = sqrtf(powf(gx[j*width+i], 2) + powf(gy[j*width+i], 2));
-            orientation[j*width+i] = fmod(atan2f(gy[j*width+i], gx[j*width+i] + 0.0000000001)
+            orientation[j*width+i] = fmod(atan2f(gy[j*width+i], gx[j*width+i] + small_num)
                     * (180 / 3.14159265), 180);
+            if (orientation[j*width+i] < 0) {
+                orientation[j*width+i] += 180;
+            }
         }
     }
 
@@ -399,7 +414,9 @@ int main(int argc, char *argv[])
                 int yval = cy/2 + cy*j;
                 //printf("i = %d, j = %d, xval = %d, yval = %d, w=%d, h=%d, ncx=%d, ncy=%d\n",
                         // i, j, xval, yval, width, height, n_cellsx, n_cellsy);
-                hist[k*n_cellsx*n_cellsy + i*n_cellsx + j] = tempoutarr[yval*width + xval];
+                //hist[k*n_cellsx*n_cellsy + i*n_cellsx + j] = tempoutarr[yval*width + xval];
+                hist[j*n_cellsx*num_orientations + num_orientations*i + k] = tempoutarr[yval*width + xval];
+            
             }
         }
     }
@@ -462,10 +479,76 @@ int main(int argc, char *argv[])
     ofstream file;
     file.open("output/cpp_out.txt");
     for (int i = 0; i < block_arr_size; i++) {
-        file << blocks[i];
+        file << normalised_blocks[i];
         file << "\n";
     }
     file.close();
+
+    //Saving to text file:
+    file.open("output/cpp_hist.txt");
+    for (int i = 0; i < n_cellsx*n_cellsy*num_orientations; i++) {
+        file << hist[i];
+        file << "\n";
+    }
+    file.close();
+
+    //Saving to text file:
+    file.open("output/cpp_gx.txt");
+    for (int i = 0; i < width*height; i++) {
+        file << gx[i];
+        file << "\n";
+    }
+    file.close();
+
+    //Saving to text file:
+    file.open("output/cpp_gy.txt");
+    for (int i = 0; i < width*height; i++) {
+        file << gy[i];
+        file << "\n";
+    }
+    file.close();
+
+    //Saving to text file:
+    file.open("output/cpp_pixels.txt");
+    for (int i = 0; i < width*height; i++) {
+        file << pixels[i];
+        file << "\n";
+    }
+    file.close();
+
+    //Saving to text file:
+    file.open("output/cpp_mag.txt");
+    for (int i = 0; i < width*height; i++) {
+        file << magnitude[i];
+        file << "\n";
+    }
+    file.close();
+
+    //Saving to text file:
+    file.open("output/cpp_ori.txt");
+    for (int i = 0; i < width*height; i++) {
+        file << orientation[i];
+        file << "\n";
+    }
+    file.close();
+
+    float* filter_test = NULL;
+    filter_test = new float[width*height];
+    bzero(filter_test, sizeof(float)*width*height);
+    uniform_filter(pixels, filter_test, width, height, cx, cy);
+    
+     //Saving to text file:
+    file.open("output/cpp_filter.txt");
+    for (int i = 0; i < width*height; i++) {
+        file << filter_test[i];
+        file << "\n";
+    }
+    file.close();
+    
+    delete [] filter_test;
+
+
+
 
     //Print timestamping data:
     printf("Timestamps:\n\n");

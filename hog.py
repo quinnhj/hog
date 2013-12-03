@@ -81,6 +81,10 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
     gx[:, :-1] = np.diff(image, n=1, axis=1)
     gy[:-1, :] = np.diff(image, n=1, axis=0)
 
+    np.savetxt('output/py_pixels.txt', image.ravel())
+    np.savetxt('output/py_gx.txt', gx.ravel())
+    np.savetxt('output/py_gy.txt', gy.ravel())
+
     """
     The third stage aims to produce an encoding that is sensitive to
     local image content while remaining resistant to small changes in
@@ -98,7 +102,11 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
 
     magnitude = sqrt(gx ** 2 + gy ** 2)
     orientation = arctan2(gy, (gx + 1e-15)) * (180 / pi) % 180
+    #orientation = arctan2(gy, (gx + 1e-15)) * (180 / pi) + 90
 
+    np.savetxt('output/py_ori.txt', orientation.ravel())
+    np.savetxt('output/py_mag.txt', magnitude.ravel())
+    
     sy, sx = image.shape
     cx, cy = pixels_per_cell
     bx, by = cells_per_block
@@ -134,6 +142,8 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
 
     # now for each cell, compute the histogram
     #orientation_histogram = np.zeros((n_cellsx, n_cellsy, orientations))
+
+    np.savetxt('output/py_hist.txt', orientation_histogram.ravel())
 
     radius = min(cx, cy) // 2 - 1
     hog_image = None
@@ -178,6 +188,14 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
     Gradient (HOG) descriptors.
     """
 
+
+
+    # Didn't know where to put this....
+    t_filt = uniform_filter(image, size=(cy, cx))
+    np.savetxt('output/py_filter.txt', t_filt.ravel())
+
+
+
     n_blocksx = (n_cellsx - bx) + 1
     n_blocksy = (n_cellsy - by) + 1
     normalised_blocks = np.zeros((n_blocksy, n_blocksx,
@@ -214,7 +232,7 @@ for i in range(20):
     print pic[i][0]
 '''
 
-ret, vis = hog(pic, visualise=True)
+ret, vis = hog(pic, visualise=True, normalise=True)
 print ret
 print ret.shape
 
