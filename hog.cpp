@@ -89,27 +89,36 @@ void convert_to_frame(frame_ptr out, pixel_t *in)
 
 
 void uniform_filter(float *in, float *out, int width, int height, int cx, int cy) {
-    int divisor = (float) cx * cy;
+    float divisor = (float) cx * cy;
     int yval, xval;
 
     //printf("At beginning of uniform filter\n");
-
+    int count = 0;
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < height; j++) {
 
-            for (int a = (-1*ceil(cx/2)) + 1; a <= cx/2; a++) {
-                for (int b = (-1*ceil(cy/2)) + 1; b <= cy/2; b++) {
-                    
+            for (int a = (-1*ceil(cx/ 2.0)) + 1; a <= cx/2; a++) {
+                for (int b = (-1*ceil(cy/2.0)) + 1; b <= cy/2; b++) {
+                                      
                     xval = i + a;
-                    if (i+a < 0) xval = 0;
-                    if (i+a >= width) xval = width - 1;
+                    if (i+a < 0) xval = -1*xval - 1;
+                    if (i+a >= width) xval = 2*width - xval - 1;
                     
                     yval = j + b;
-                    if (j+b < 0) yval = 0;
-                    if (j+b >= height) yval = height - 1;
+                    if (j+b < 0) yval = -1*yval - 1;
+                    if (j+b >= height) yval = 2*height - yval - 1;
+                  
+                  
+                    /* 
+                    if (i == 0 && j == 0) {
+                        printf("count = %d, a = %d, b = %d, val = %f, xval = %d, yval = %d\n", 
+                                    count++, a, b, in[j*width + i] / divisor,
+                                    xval, yval);      
+                    }
+                    */
                    
                     //printf("Calculated x and y val. xval = %d, yval = %d\n", xval, yval);
-                    out[yval*width + xval] += in[j*width + i] / divisor;
+                    out[yval*width + xval] += (in[j*width + i] / divisor);
 
                 }
             }
@@ -119,7 +128,7 @@ void uniform_filter(float *in, float *out, int width, int height, int cx, int cy
 }
 
 void image_to_hist (float *image, float *hist, int width, int height,
-                    int cx, int cy, int ncells_x, int ncells_y, int num_orientations) {
+                    int cx, int cy, int n_cellsx, int n_cellsy, int num_orientations) {
 
     /*
      * Logical steps:
@@ -151,45 +160,48 @@ void image_to_hist (float *image, float *hist, int width, int height,
      *
      */
     
-    int gx;
-    int gy;
-    int orientation;
-    int magnitude;
+    float gx;
+    float gy;
+    float orientation;
+    float magnitude;
     int bin;
 
-    // Should this be a float division?
-    int num_div_180 = num_orientations / 180;
+    float num_div_180 = (float)num_orientations / 180.0f;
 
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
             
             // Step 1, calculating gx and gy
-            if (i != 0) {
-                gx = image[j*width + i] - image[j*width + i - 1];
+            if (i != width - 1) {
+                gx = image[j*width + i + 1] - image[j*width + i];
             } else {
                 gx = 0.0;
             }
 
-            if (j != 0) {
-                gy = image[j*width + i] - image[(j-1) * width + i];
+            if (j != height - 1) {
+                gy = image[(j+1)*width + i] - image[j * width + i];
             } else {
-                gx = 0.0;
+                gy = 0.0;
             }
 
             // Step 2, calculating mag and orientation
             magnitude = sqrtf(powf(gx, 2) + powf(gy, 2));
-            orientation = fmod(atan2f(gy, gx + 0.0000000000001) * (180 / 3.14159265), 180);
+            orientation= fmod(atan2f(gy, gx + 0.00000000000001)
+                    * (180 / 3.14159265), 180);
+            if (orientation < 0) {
+                orientation += 180;
+            }
 
             // Step 3, calculating bin.
-            bin = orientation * num_div_180;
+            bin = (int)floor(orientation * num_div_180);
 
-            // Step 4, calculating which cells it belongs to
+            // Step 4, calculating which cell it belongs to
             
-
-
-
-
-
+            int cellx = i / cx;
+            int celly = j / cy;
+            
+            hist[celly*n_cellsx*num_orientations + cellx*num_orientations + bin] += 
+                        magnitude / (cx * cy);
 
         }
     }
@@ -244,7 +256,7 @@ int main(int argc, char *argv[])
      * Declaration of timestamp constant / array
      */
       
-    int num_timestamps = 7;
+    int num_timestamps = 5;
     double timestamps[num_timestamps];
     timestamps[0] = timestamp();
 
@@ -277,6 +289,7 @@ int main(int argc, char *argv[])
      * be done via command line input later.
      */
 
+    /*
     float *gx = NULL;
     float *gy = NULL;
     gx = new float[width*height];
@@ -290,6 +303,7 @@ int main(int argc, char *argv[])
     orientation = new float[width*height];
     bzero(magnitude, sizeof(float)*width*height);
     bzero(orientation, sizeof(float)*width*height);
+    */
 
     int sx, sy, cx, cy, bx, by;
     int pixels_per_cell = 8;
@@ -307,9 +321,6 @@ int main(int argc, char *argv[])
    
     float *hist = new float[n_cellsx*n_cellsy*num_orientations];
     bzero(hist, sizeof(float)*n_cellsx*n_cellsy*num_orientations);
-
-    float *temparr = new float[width*height];
-    float *tempoutarr = new float[width*height];
 
     //Timestamp for end of setup. 
     timestamps[1] = timestamp();
@@ -340,7 +351,9 @@ int main(int argc, char *argv[])
     printf("Successfully converted grayscale\n");
     printf("%f", pixels[rand() % 10]);
     printf("Finished printing out random val1\n");
-     
+    
+    
+    /* 
     // fill out gx and gy
     // gx
     // Merge up
@@ -387,6 +400,9 @@ int main(int argc, char *argv[])
     printf("%f", magnitude[rand() % 10]);
     printf("%f", orientation[rand() % 10]);
     printf("Finished calculating mag/orientation\n");
+      
+      
+      
            
     // Move K into loop -- only do one nested for loop.
     // Needs to have block normalization inside, write to output array.
@@ -421,9 +437,13 @@ int main(int argc, char *argv[])
         }
     }
 
+    */
 
+    image_to_hist(pixels, hist, width, height,
+                    cx, cy, n_cellsx, n_cellsy, num_orientations);
 
-    timestamps[5] = timestamp();
+    // TS for finished histogram
+    timestamps[3] = timestamp();
 
     int n_blocksx = (n_cellsx - bx) + 1;
     int n_blocksy = (n_cellsy - by) + 1;
@@ -466,7 +486,7 @@ int main(int argc, char *argv[])
 
     //Flatten
 
-    timestamps[6] = timestamp();
+    timestamps[4] = timestamp();
 
     omp_set_num_threads(nthreads);
     int flops = 0;
@@ -492,64 +512,6 @@ int main(int argc, char *argv[])
     }
     file.close();
 
-    //Saving to text file:
-    file.open("output/cpp_gx.txt");
-    for (int i = 0; i < width*height; i++) {
-        file << gx[i];
-        file << "\n";
-    }
-    file.close();
-
-    //Saving to text file:
-    file.open("output/cpp_gy.txt");
-    for (int i = 0; i < width*height; i++) {
-        file << gy[i];
-        file << "\n";
-    }
-    file.close();
-
-    //Saving to text file:
-    file.open("output/cpp_pixels.txt");
-    for (int i = 0; i < width*height; i++) {
-        file << pixels[i];
-        file << "\n";
-    }
-    file.close();
-
-    //Saving to text file:
-    file.open("output/cpp_mag.txt");
-    for (int i = 0; i < width*height; i++) {
-        file << magnitude[i];
-        file << "\n";
-    }
-    file.close();
-
-    //Saving to text file:
-    file.open("output/cpp_ori.txt");
-    for (int i = 0; i < width*height; i++) {
-        file << orientation[i];
-        file << "\n";
-    }
-    file.close();
-
-    float* filter_test = NULL;
-    filter_test = new float[width*height];
-    bzero(filter_test, sizeof(float)*width*height);
-    uniform_filter(pixels, filter_test, width, height, cx, cy);
-    
-     //Saving to text file:
-    file.open("output/cpp_filter.txt");
-    for (int i = 0; i < width*height; i++) {
-        file << filter_test[i];
-        file << "\n";
-    }
-    file.close();
-    
-    delete [] filter_test;
-
-
-
-
     //Print timestamping data:
     printf("Timestamps:\n\n");
     double total_time = timestamps[num_timestamps-1] - timestamps[0];
@@ -566,12 +528,13 @@ int main(int argc, char *argv[])
     delete [] inPix; 
     delete [] outPix;
     delete [] hist;
-    delete [] orientation;
-    delete [] temparr;
-    delete [] tempoutarr;
-    delete [] magnitude;
-    delete [] gx;
-    delete [] gy;
+    delete [] normalised_blocks;
+    //delete [] temparr;
+    //delete [] tempoutarr;
+    //delete [] magnitude;
+    //delete [] orientation;
+    //delete [] gx;
+    //delete [] gy;
     return 0;
 }
 

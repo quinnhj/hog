@@ -7,7 +7,7 @@ if len(sys.argv) < 2:
     print "Too few arguments"
     sys.exit(1)
 
-THRESHOLD = 10
+THRESHOLD = 5
 count = 0
 seen = False;
 index = 0;

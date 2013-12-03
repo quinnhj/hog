@@ -224,7 +224,7 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
 
 
 
-pic = misc.imread('hogscent.jpg', flatten=True)
+pic = misc.imread('zelda.jpg', flatten=True)
 
 
 '''
