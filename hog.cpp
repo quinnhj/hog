@@ -105,6 +105,7 @@ void image_to_hist (float *image, float *hist, int width, int height,
 
     float num_div_180 = (float)num_orientations / 180.0f;
 
+    #pragma omp parallel for
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
             
@@ -195,6 +196,8 @@ int main(int argc, char *argv[])
     double timestamps[num_timestamps];
     timestamps[0] = timestamp();
 
+    omp_set_num_threads(nthreads);
+
     /*
      * Reading in the JPEG image
      * Does validation and convert into a pixel form
@@ -244,6 +247,7 @@ int main(int argc, char *argv[])
     timestamps[1] = timestamp();
    
     // Convert to grayscale and normalize
+    #pragma omp parallel for
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < height; j++) {
             pixels[j*width + i] = sqrtf(rgb_to_grayscale(inPix[j*width + i]));
@@ -270,6 +274,7 @@ int main(int argc, char *argv[])
     float arr_sum = 0;
    
     int block_size = by * bx * num_orientations;
+    #pragma omp parallel for
     for (int j = 0; j < n_blocksy; j++) {
         for (int i = 0; i < n_blocksx; i++) {
             arr_sum = 0;
@@ -300,8 +305,6 @@ int main(int argc, char *argv[])
 
     // Time to flatten
     timestamps[4] = timestamp();
-
-    omp_set_num_threads(nthreads);
     int flops = 0;
     convert_to_frame(frame, outPix);
 
