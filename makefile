@@ -1,4 +1,4 @@
-OBJS=hog.o readjpeg.o
+OBJS=hog.o readjpeg.o hog_serial.o
 
 %.o: %.cpp readjpeg.h
 	g++ -fopenmp -O2 -c $<

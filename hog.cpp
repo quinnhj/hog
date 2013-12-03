@@ -11,14 +11,8 @@
 #include <fstream>
 
 #include "readjpeg.h"
+#include "hog_serial.h"
 using namespace std;
-
-typedef struct
-{
-    float r;
-    float g;
-    float b;
-} pixel_t;
 
 double timestamp()
 {
@@ -64,129 +58,40 @@ void convert_to_frame(frame_ptr out, pixel_t *in)
     }
 }
 
-void image_to_hist (float *image, float *hist, int width, int height,
-                    int cx, int cy, int n_cellsx, int n_cellsy, int num_orientations) {
-
-    /*
-     * Logical steps:
-     * 
-     * For each pixel in image:
-     *
-     * 1) Calculate gx and gy based on neighbors. gx is itself minus the
-     * one to the left of it. gy is itself minus the one above it. If there is
-     * no one to the left/above, set to zero. 
-     *
-     * 2) Calculate magnitude and orientation. Magnitude is defined as:
-     *      sqrtf(powf(gx, 2) + powf(gy, 2));
-     * Orientation is defined as:
-     *      fmod(atan2f(gy, gx + 0.000000000001) * (180 / 3.14159265), 180);
-     *
-     * 3) Using orientation, calculate which "bin" it goes into. 
-     *
-     * 4) Figure out which cells it belongs in. Increment those by a
-     * "spread out" (magnitude divided by filter size) value.
-     *
-     * To figure out which cell it belongs to, know that uniform filters
-     * distribute to anything withing a square of "radius" cx and cy around
-     * it. So if we're smart, we can do mod math on the coordinates to figure
-     * them out.
-     *
-     *
-     *
-     *
-     *
-     */
-    
-    float gx;
-    float gy;
-    float orientation;
-    float magnitude;
-    int bin;
-
-    float num_div_180 = (float)num_orientations / 180.0f;
-
-    #pragma omp parallel for
-    for (int j = 0; j < height; j++) {
-        for (int i = 0; i < width; i++) {
-            
-            // Step 1, calculating gx and gy
-            if (i != width - 1) {
-                gx = image[j*width + i + 1] - image[j*width + i];
-            } else {
-                gx = 0.0;
-            }
-
-            if (j != height - 1) {
-                gy = image[(j+1)*width + i] - image[j * width + i];
-            } else {
-                gy = 0.0;
-            }
-
-            // Step 2, calculating mag and orientation
-            magnitude = sqrtf(powf(gx, 2) + powf(gy, 2));
-            orientation= fmod(atan2f(gy, gx + 0.00000000000001)
-                    * (180 / 3.14159265), 180);
-            if (orientation < 0) {
-                orientation += 180;
-            }
-
-            // Step 3, calculating bin.
-            bin = (int)floor(orientation * num_div_180);
-
-            // Step 4, calculating which cell it belongs to
-            
-            int cellx = i / cx;
-            int celly = j / cy;
-            
-            hist[celly*n_cellsx*num_orientations + cellx*num_orientations + bin] += 
-                        magnitude / (cx * cy);
-
-        }
-    }
-}
-
 
 int main(int argc, char *argv[])
 {
     int c;
     char *inName = NULL;
-    char *outName = NULL;
-    int n=1;
     int width=-1,height=-1;
     frame_ptr frame;
+    int version = 1;
 
     pixel_t *inPix=NULL;
-    pixel_t *outPix=NULL;
     float *pixels=NULL;
-    int *blur_radii = NULL;
     int nthreads = 1;
-    srand(5);
    
-    while((c = getopt(argc, argv, "i:n:o:t:"))!=-1)
+    while((c = getopt(argc, argv, "i:t:v:"))!=-1)
     {
         switch(c)
         {
             case 'i':
                     inName = optarg;
                     break;
-            case 'o':
-                    outName = optarg;
-                    break;
-            case 'n':
-                    n = atoi(optarg);
-                    break;
             case 't':
                     nthreads = atoi(optarg);
+                    break;
+            case 'v':
+                    version = atoi(optarg);
                     break;
         }
     }
 
-    if (inName == 0 || outName == 0)
+    if (inName == 0)
     {
-        printf("need input filename and output filename\n");
+        printf("need input filename\n");
         return -1;
     }
-
 
     /*
      * Declaration of timestamp constant / array
@@ -195,7 +100,6 @@ int main(int argc, char *argv[])
     int num_timestamps = 5;
     double timestamps[num_timestamps];
     timestamps[0] = timestamp();
-
     omp_set_num_threads(nthreads);
 
     /*
@@ -214,10 +118,7 @@ int main(int argc, char *argv[])
     height = frame->image_height;
  
     inPix = new pixel_t[width*height];
-    outPix = new pixel_t[width*height];
-    blur_radii = new int[width*height];
     pixels = new float[width*height];
- 
     convert_to_pixel(inPix, frame);
 
     /*
@@ -242,75 +143,48 @@ int main(int argc, char *argv[])
    
     float *hist = new float[n_cellsx*n_cellsy*num_orientations];
     bzero(hist, sizeof(float)*n_cellsx*n_cellsy*num_orientations);
-
-    //Timestamp for end of setup. 
-    timestamps[1] = timestamp();
-   
-    // Convert to grayscale and normalize
-    #pragma omp parallel for
-    for (int i = 0; i < width; i++) {
-        for (int j = 0; j < height; j++) {
-            pixels[j*width + i] = sqrtf(rgb_to_grayscale(inPix[j*width + i]));
-        }
-    }
-
-    //Finished converting to grayscale
-    timestamps[2] = timestamp();
     
-    image_to_hist(pixels, hist, width, height,
-                    cx, cy, n_cellsx, n_cellsy, num_orientations);
-
-    // TS for finished histogram
-    timestamps[3] = timestamp();
-
     int n_blocksx = (n_cellsx - bx) + 1;
     int n_blocksy = (n_cellsy - by) + 1;
     int block_arr_size = n_blocksx*n_blocksy*by*bx*num_orientations;
     float *normalised_blocks = new float[block_arr_size];
     bzero(normalised_blocks, sizeof(float)*block_arr_size);
 
-    //Normalizing into flat block array
-    float eps = 1e-5;
-    float arr_sum = 0;
-   
-    int block_size = by * bx * num_orientations;
-    #pragma omp parallel for
-    for (int j = 0; j < n_blocksy; j++) {
-        for (int i = 0; i < n_blocksx; i++) {
-            arr_sum = 0;
 
-            for (int ay = 0; ay < by; ay++) {
-                for (int ax = 0; ax < bx; ax++) {
-                    for (int k = 0; k < num_orientations; k++) {
-                        arr_sum += hist[(j+ay)*n_cellsx*num_orientations
-                                    + (i+ax)*num_orientations + k];
-                    }
-                }
-            }
+    //Timestamp for end of setup. 
+    timestamps[1] = timestamp();
 
-            for (int ay = 0; ay < by; ay++) {
-                for (int ax = 0; ax < bx; ax++) {
-                    for (int k = 0; k < num_orientations; k++) {
-                        normalised_blocks[j*n_blocksx*block_size +
-                                    i*block_size + ay*bx*num_orientations
-                                    + ax*num_orientations + k] =
-
-                        hist[(j+ay)*n_cellsx*num_orientations
-                                + (i+ax)*num_orientations + k] / sqrtf(powf(arr_sum, 2) + eps);
-                    }
-                }
-            }
-        }
+    switch (version) {
+        case 1:
+            image_to_gray_serial(inPix, pixels, width, height);
+            break;
     }
 
-    // Time to flatten
+    //TS for converting to grayscale
+    timestamps[2] = timestamp();
+    
+    switch (version) {
+        case 1:
+            image_to_hist_serial(pixels, hist, width, height,
+                    cx, cy, n_cellsx, n_cellsy, num_orientations);
+            break;
+    }
+
+    // TS for finished histogram
+    timestamps[3] = timestamp();
+    
+    switch (version) {
+        case 1:
+            hist_to_blocks_serial(hist, normalised_blocks, by, bx,
+                    n_blocksx, n_blocksy, num_orientations,n_cellsx,
+                    n_cellsy);
+            break;
+    }
+
+    // TS to flatten
     timestamps[4] = timestamp();
-    int flops = 0;
-    convert_to_frame(frame, outPix);
 
-    write_JPEG_file(outName,frame,75);
-    destroy_frame(frame);
-
+   
 
     //Saving to text file:
     ofstream file;
@@ -338,11 +212,12 @@ int main(int argc, char *argv[])
         printf("\t%f percent\n", ((timestamps[i] - timestamps[i-1]) / total_time) * 100);
     }
 
-    delete [] blur_radii;
+    //Free up stuff
+    destroy_frame(frame);
     delete [] inPix; 
-    delete [] outPix;
     delete [] hist;
     delete [] normalised_blocks;
+    delete [] pixels;
     return 0;
 }
 
