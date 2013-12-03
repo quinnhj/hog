@@ -447,7 +447,7 @@ int main(int argc, char *argv[])
                 arr_sum = 0;
                 for (int x = i; x < i + bx; x++) {
                     for (int y = j; y < j + by; y++) {
-                        arr_sum = arr_sum + hist[k*x*y + x*y + y];
+                        arr_sum = arr_sum + hist[k*bx*by + x*by + y];
                     }
                 }
                 counter_x = 0;
@@ -455,7 +455,7 @@ int main(int argc, char *argv[])
                 for (int x = i; x < i + bx; x++) {
                     for (int y = j; y < j + by; y++) {
                        //block[k*counter_x*counter_y + counter_x*counter_y + counter_y] = hist[k*x*y + x*y + y];
-                       normalised_blocks[k*i*j*counter_x*counter_y + i*j*counter_x*counter_y + j*counter_x*counter_y + counter_x*counter_y + counter_y] = hist[k*x*y + x*y + y] / (sqrtf(powf(arr_sum, 2) + eps));
+                       normalised_blocks[k*n_blocksx*n_blocksy*bx*by + i*n_blocksy*bx*by + j*bx*by + counter_x*by + counter_y] = hist[k*bx*y + x*by + y] / (sqrtf(powf(arr_sum, 2) + eps));
                        counter_y++;
                     }
                     counter_x++;
