@@ -1,4 +1,5 @@
 import numpy as np
+import sys, getopt
 from scipy import sqrt, pi, arctan2, cos, sin
 from scipy.ndimage import uniform_filter
 from scipy import ndimage
@@ -81,9 +82,9 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
     gx[:, :-1] = np.diff(image, n=1, axis=1)
     gy[:-1, :] = np.diff(image, n=1, axis=0)
 
-    np.savetxt('output/py_pixels.txt', image.ravel())
-    np.savetxt('output/py_gx.txt', gx.ravel())
-    np.savetxt('output/py_gy.txt', gy.ravel())
+    #np.savetxt('output/py_pixels.txt', image.ravel())
+    #np.savetxt('output/py_gx.txt', gx.ravel())
+    #np.savetxt('output/py_gy.txt', gy.ravel())
 
     """
     The third stage aims to produce an encoding that is sensitive to
@@ -104,8 +105,8 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
     orientation = arctan2(gy, (gx + 1e-15)) * (180 / pi) % 180
     #orientation = arctan2(gy, (gx + 1e-15)) * (180 / pi) + 90
 
-    np.savetxt('output/py_ori.txt', orientation.ravel())
-    np.savetxt('output/py_mag.txt', magnitude.ravel())
+    #np.savetxt('output/py_ori.txt', orientation.ravel())
+    #np.savetxt('output/py_mag.txt', magnitude.ravel())
     
     sy, sx = image.shape
     cx, cy = pixels_per_cell
@@ -192,7 +193,7 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
 
     # Didn't know where to put this....
     t_filt = uniform_filter(image, size=(cy, cx))
-    np.savetxt('output/py_filter.txt', t_filt.ravel())
+    #np.savetxt('output/py_filter.txt', t_filt.ravel())
 
 
 
@@ -222,20 +223,33 @@ def hog(image, orientations=9, pixels_per_cell=(8, 8),
 
 
 
+def main(argv):
+    inputfile = ''
+    outputfile = ''
+    try:
+        opts, args = getopt.getopt(argv,"hi:o:",["ifile=","ofile="])
+    except getopt.GetoptError:
+        print 'test.py -i <inputfile> -o <outputfile>'
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print 'test.py -i <inputfile> -o <outputfile>'
+            sys.exit()
+        elif opt in ("-i", "--ifile"):
+            inputfile = arg
+        elif opt in ("-o", "--ofile"):
+            outputfile = arg
+
+    pic = misc.imread(inputfile, flatten=True)
+
+    ret, vis = hog(pic, visualise=True, normalise=True)
+    #print ret
+    #print ret.shape
+
+    np.savetxt('output/py_out.txt', ret)
+    misc.imsave(outputfile, vis)
 
 
-pic = misc.imread('zelda.jpg', flatten=True)
 
-
-'''
-for i in range(20):
-    print pic[i][0]
-'''
-
-ret, vis = hog(pic, visualise=True, normalise=True)
-print ret
-print ret.shape
-
-np.savetxt('output/py_out.txt', ret)
-misc.imsave('output/py_img.png', vis)
-
+if __name__ == "__main__":
+    main(sys.argv[1:])
