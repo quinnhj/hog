@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
     }
 
 
-    timestamps[0] = timestamp();
+    timestamps[0] = timestamp();1
 
     frame = read_JPEG_file(inName);
     if(!frame)
@@ -319,25 +319,50 @@ int main(int argc, char *argv[])
         }
     }
 
+
+
     timestamps[5] = timestamp();
 
     int n_blocksx = (n_cellsx - bx) + 1;
     int n_blocksy = (n_cellsy - by) + 1;
     int block_arr_size = n_blocksx*n_blocksy*by*bx*num_orientations;
-    float *blocks = new float[block_arr_size];
-    bzero(blocks, sizeof(float)*block_arr_size);
+    float *normalised_blocks = new float[block_arr_size];
+    //float *block = new float[bx*by*num_orientations];
+    //bzero(block, sizeof(float)*bx*by*num_orientations);
+    bzero(normalised_blocks, sizeof(float)*block_arr_size);
 
     //Normalizing into flat block array
     float b_val;
-    for (int i = 0; i < n_blocksx; i++) {
-        for (int j = 0; j < n_blocksy; j++) {
-           
-            
-            
-            //Didn't finish yet
-
+    float eps = 1e-5;
+    int counter_x = 0;
+    int counter_y = 0;
+    float arr_sum = 0;
+    //k = orientation, i = block_x, j = block_y
+    for (int k = 0; k < num_orientations; k++) {
+        for (int i = 0; i < n_blocksx; i++) {
+            for (int j = 0; j < n_blocksy; j++) {
+                //summation
+                arr_sum = 0;
+                for (int x = i; x < i + bx; x++) {
+                    for (int y = j; y < j + by; y++) {
+                        arr_sum = arr_sum + hist[k*x*y + x*y + y];
+                    }
+                }
+                counter_x = 0;
+                counter_y = 0;
+                for (int x = i; x < i + bx; x++) {
+                    for (int y = j; y < j + by; y++) {
+                       //block[k*counter_x*counter_y + counter_x*counter_y + counter_y] = hist[k*x*y + x*y + y];
+                       normalised_blocks[k*i*j*counter_x*counter_y + i*j*counter_x*counter_y + j*counter_x*counter_y + counter_x*counter_y + counter_y] = hist[k*x*y + x*y + y] / (sqrtf(powf(arr_sum, 2) + eps));
+                       counter_y++;
+                    }
+                    counter_x++;
+                }
+            }
         }
     }
+
+    //Flatten
 
     timestamps[6] = timestamp();
 
