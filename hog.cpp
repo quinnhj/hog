@@ -112,6 +112,84 @@ void uniform_filter(float *in, float *out, int width, int height, int cx, int cy
     }
 }
 
+void image_to_hist (float *image, float *hist, int width, int height,
+                    int cx, int cy, int ncells_x, int ncells_y, int num_orientations) {
+
+    /*
+     * Logical steps:
+     * 
+     * For each pixel in image:
+     *
+     * 1) Calculate gx and gy based on neighbors. gx is itself minus the
+     * one to the left of it. gy is itself minus the one above it. If there is
+     * no one to the left/above, set to zero. 
+     *
+     * 2) Calculate magnitude and orientation. Magnitude is defined as:
+     *      sqrtf(powf(gx, 2) + powf(gy, 2));
+     * Orientation is defined as:
+     *      fmod(atan2f(gy, gx + 0.000000000001) * (180 / 3.14159265), 180);
+     *
+     * 3) Using orientation, calculate which "bin" it goes into. 
+     *
+     * 4) Figure out which cells it belongs in. Increment those by a
+     * "spread out" (magnitude divided by filter size) value.
+     *
+     * To figure out which cell it belongs to, know that uniform filters
+     * distribute to anything withing a square of "radius" cx and cy around
+     * it. So if we're smart, we can do mod math on the coordinates to figure
+     * them out.
+     *
+     *
+     *
+     *
+     *
+     */
+    
+    int gx;
+    int gy;
+    int orientation;
+    int magnitude;
+    int bin;
+
+    // Should this be a float division?
+    int num_div_180 = num_orientations / 180;
+
+    for (int j = 0; j < height; j++) {
+        for (int i = 0; i < width; i++) {
+            
+            // Step 1, calculating gx and gy
+            if (i != 0) {
+                gx = image[j*width + i] - image[j*width + i - 1]
+            } else {
+                gx = 0.0;
+            }
+
+            if (j != 0) {
+                gy = image[j*width + i] - image[(j-1) * width + i]
+            } else {
+                gx = 0.0;
+            }
+
+            // Step 2, calculating mag and orientation
+            magnitude = sqrtf(powf(gx, 2) + powf(gy, 2));
+            orientation = fmod(atan2f(gy, gx + 0.0000000000001) * (180 / 3.14159265), 180);
+
+            // Step 3, calculating bin.
+            bin = orientation * num_div_180;
+
+            // Step 4, calculating which cells it belongs to
+            
+
+
+
+
+
+
+        }
+    }
+
+
+}
 
 
 int main(int argc, char *argv[])
@@ -128,14 +206,8 @@ int main(int argc, char *argv[])
     float *pixels=NULL;
     int *blur_radii = NULL;
     int nthreads = 1;
-
     srand(5);
-
-    
-    int num_timestamps = 7;
-    double timestamps[num_timestamps];
-
-
+   
     while((c = getopt(argc, argv, "i:n:o:t:"))!=-1)
     {
         switch(c)
@@ -155,8 +227,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    
-    
     if (inName == 0 || outName == 0)
     {
         printf("need input filename and output filename\n");
@@ -164,7 +234,18 @@ int main(int argc, char *argv[])
     }
 
 
+    /*
+     * Declaration of timestamp constant / array
+     */
+      
+    int num_timestamps = 7;
+    double timestamps[num_timestamps];
     timestamps[0] = timestamp();
+
+    /*
+     * Reading in the JPEG image
+     * Does validation and convert into a pixel form
+     */
 
     frame = read_JPEG_file(inName);
     if(!frame)
@@ -183,7 +264,13 @@ int main(int argc, char *argv[])
  
     convert_to_pixel(inPix, frame);
 
-    // Initialize to zeros gx and gy
+    /*
+     * Here we declare and create all data structures
+     * This is also where constants are set, such as 
+     * pixels per cell and whatnot. Those should probably
+     * be done via command line input later.
+     */
+
     float *gx = NULL;
     float *gy = NULL;
     gx = new float[width*height];
@@ -191,7 +278,6 @@ int main(int argc, char *argv[])
     bzero(gx, sizeof(float)*width*height);
     bzero(gy, sizeof(float)*width*height);
     
-    //Calculate Magnitude and Orientation
     float *magnitude = NULL;
     float *orientation = NULL;
     magnitude = new float[width*height];
@@ -199,7 +285,6 @@ int main(int argc, char *argv[])
     bzero(magnitude, sizeof(float)*width*height);
     bzero(orientation, sizeof(float)*width*height);
 
-    // Calculating sizes
     int sx, sy, cx, cy, bx, by;
     int pixels_per_cell = 8;
     int cells_per_block = 3;
@@ -214,14 +299,13 @@ int main(int argc, char *argv[])
     int n_cellsx = (int)floorf((sx / cx));
     int n_cellsy = (int)floorf((sy / cy));
    
-    // Create histogram
     float *hist = new float[n_cellsx*n_cellsy*num_orientations];
     bzero(hist, sizeof(float)*n_cellsx*n_cellsy*num_orientations);
 
-    // Temparray for rest of convolution
     float *temparr = new float[width*height];
     float *tempoutarr = new float[width*height];
- 
+
+    //Timestamp for end of setup. 
     timestamps[1] = timestamp();
 
     printf("Starting Computations.\n"); 
@@ -244,6 +328,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    //Finished converting to grayscale
     timestamps[2] = timestamp();
 
     printf("Successfully converted grayscale\n");
