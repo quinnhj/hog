@@ -9,9 +9,14 @@
 #include <math.h>
 #include <iostream>
 #include <fstream>
+#include <string>
+#include <cmath>
+#include <cassert>
 
 #include "readjpeg.h"
+#include "clhelp.h"
 #include "hog_serial.h"
+#include "hog_parallel.h"
 using namespace std;
 
 double timestamp()
@@ -60,7 +65,7 @@ void convert_to_frame(frame_ptr out, pixel_t *in)
 
 
 int main(int argc, char *argv[])
-{
+{    
     int c;
     char *inName = NULL;
     int width=-1,height=-1;
@@ -151,11 +156,60 @@ int main(int argc, char *argv[])
     bzero(normalised_blocks, sizeof(float)*block_arr_size);
 
 
+    /*
+     * Initializing opencl
+     *
+     */
+    std::string kernel_source_str;
+    std::string arraycompact_kernel_file =
+            std::string("radixsort.cl");
+
+    std::list<std::string> kernel_names;
+    std::string hist_name_str = std::string("image_to_hist_2");
+    std::string block_name_str = std::string("hist_to_blocks_2");
+
+    kernel_names.push_back(hist_name_str);
+    kernel_names.push_back(block_name_str);
+
+    cl_vars_t cv;
+    std::map<std::string, cl_kernel> kernel_map;
+
+    readFile(arraycompact_kernel_file, kernel_source_str);
+    initialize_ocl(cv);
+
+    compile_ocl_program(kernel_map, cv,
+            kernel_source_str.c_str(),
+            kernel_names);
+
+    cl_mem g_pixels, g_hist, g_normalised_blocks;
+
+    cl_int err = CL_SUCCESS;
+    g_pixels = clCreateBuffer(cv.context, CL_MEM_READ_WRITE,
+            sizeof(float)*width*height, NULL, &err);
+    CHK_ERR(err);
+    g_hist = clCreateBuffer(cv.context, CL_MEM_READ_WRITE,
+            sizeof(float)*n_cellsx*n_cellsy*num_orientations, NULL, &err);
+    CHK_ERR(err);
+    g_normalised_blocks = clCreateBuffer(cv.context, CL_MEM_READ_WRITE,
+            sizeof(float)*block_arr_size, NULL, &err);
+    CHK_ERR(err);
+
+    err = clEnqueueWriteBuffer(cv.commands, g_pixels, true, 0,
+            sizeof(float)*width*height, pixels, 0, NULL, NULL);
+    CHK_ERR(err);
+
+    size_t global_work_size[2] = {n_cellsy, n_cellsx};
+    size_t local_work_size[2] = {cy, cx};
+
+
     //Timestamp for end of setup. 
     timestamps[1] = timestamp();
 
     switch (version) {
         case 1:
+            image_to_gray_serial(inPix, pixels, width, height);
+            break;
+        default:
             image_to_gray_serial(inPix, pixels, width, height);
             break;
     }
@@ -165,6 +219,20 @@ int main(int argc, char *argv[])
     
     switch (version) {
         case 1:
+            image_to_hist_serial(pixels, hist, width, height,
+                    cx, cy, n_cellsx, n_cellsy, num_orientations);
+            break;
+        case 2:
+            image_to_hist_2(g_pixels, g_hist, width, height, cx, cy,
+                    n_cellsx, n_cellsy, num_orientations, kernel_map[hist_name_str],
+                    cv.commands, cv.context);
+        
+            err = clEnqueueReadBuffer(cv.commands, g_hist, true, 0,
+                    sizeof(float) * n_cellsx * n_cellsy * num_orienations,
+                    hist, 0, NULL, NULL);
+            CHK_ERR(err);
+        
+        default:
             image_to_hist_serial(pixels, hist, width, height,
                     cx, cy, n_cellsx, n_cellsy, num_orientations);
             break;
@@ -179,12 +247,15 @@ int main(int argc, char *argv[])
                     n_blocksx, n_blocksy, num_orientations,n_cellsx,
                     n_cellsy);
             break;
+        default:
+            hist_to_blocks_serial(hist, normalised_blocks, by, bx,
+                    n_blocksx, n_blocksy, num_orientations,n_cellsx,
+                    n_cellsy);
+            break;
     }
 
     // TS to flatten
-    timestamps[4] = timestamp();
-
-   
+    timestamps[4] = timestamp(); 
 
     //Saving to text file:
     ofstream file;
@@ -220,6 +291,11 @@ int main(int argc, char *argv[])
     }
     */
     //Free up stuff
+
+    clReleaseMemObject(g_hist);
+    clReleaseMemObject(g_pixels);
+    clReleaseMemObject(g_normalised_blocks);
+
     destroy_frame(frame);
     delete [] inPix; 
     delete [] hist;
