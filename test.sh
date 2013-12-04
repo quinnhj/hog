@@ -23,6 +23,12 @@ DATA=""
 HIST=""
 FAILED=0
 FAILED_TESTS=""
+VERSION=1
+
+if [ $1 != "" ]; then
+    VERSION=$1
+fi
+
 
 echo "TESTING STARTED"
 for FILE in $(ls input); do
@@ -30,7 +36,7 @@ for FILE in $(ls input); do
     PATHNAME="input/"$FILE
     export PATHNAME
     python hog.py -i "input/"$FILE -o "output/"$FILE
-    DATA=$(./hog -i "input/"$FILE)
+    DATA=$(./hog -i "input/"$FILE -v $VERSION)
     HIST=$DATA
     DATA=$FILE","$(python compare.py output/py_out.txt output/cpp_out.txt)","${DATA%","}
     HIST=$FILE","$(python compare.py output/py_hist.txt output/cpp_hist.txt)","${HIST%","}
