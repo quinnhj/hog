@@ -1,3 +1,5 @@
+#define HALF_PI 1.5707963267948966f
+#define ONEEIGHTY_PI 57.29577951308232f
 
 inline void AtomicAdd(volatile __local float *source, const float operand) {
     union {
@@ -13,6 +15,26 @@ inline void AtomicAdd(volatile __local float *source, const float operand) {
         newVal.floatVal = prevVal.floatVal + operand;
     } while (atomic_cmpxchg((volatile __local unsigned int *)source, prevVal.intVal, newVal.intVal) != prevVal.intVal);
 }
+
+inline float fast_arctan_degree (float y, float x) {
+    
+    float angle;
+    float z = y/x;
+    float tmp = z < 0.0f ? -z : z;
+    if (tmp < 1.0f ) {
+        angle = (z/(1.0f + 0.28f*z*z)) * ONEEIGHTY_PI;
+    } else {
+        angle += (HALF_PI - z/(z*z + 0.28f)) * ONEEIGHTY_PI;
+    }
+    return angle + 360;
+}
+
+/* Not used
+inline float fast_fmod(float x, float y) {
+    float a = x/y;
+    return (a-(int)a) * y;   
+} 
+*/   
 
 /*****************************************************************************
  * Version 2
@@ -158,8 +180,8 @@ __kernel void image_to_hist_3(
     size_t i = get_global_id(1);
     size_t j = get_global_id(0);
 
-    float gx;
-    float gy;
+    float gx = 0.0;
+    float gy = 0.0;
     float orientation;
     float magnitude;
     int bin;
@@ -173,23 +195,25 @@ __kernel void image_to_hist_3(
     // Step 1, calculating gx and gy
     if (i != width - 1) {
         gx = image[j*width + i + 1] - image[j*width + i];
-    } else {
-        gx = 0.0;
     }
 
     if (j != height - 1) {
         gy = image[(j+1)*width + i] - image[j * width + i];
-    } else {
-        gy = 0.0;
     }
 
+    
     // Step 2, calculating mag and orientation
-    magnitude = sqrt(pow(gx, 2) + pow(gy, 2));
-    orientation= fmod(atan2(gy, gx + 0.00000000000001)
-            * (180 / 3.14159265), 180);
-    if (orientation < 0) {
-        orientation += 180;
-    }
+    
+    /* This approximation takes longer....
+    magnitude = (gx*gx) + (gy*gy);
+    int mag_sqrt_val = *(int*)&magnitude;
+    mag_sqrt_val = (1 << 29) + (mag_sqrt_val >> 1) - (1 << 22) - 0x4C000;
+    magnitude = *(float*)&mag_sqrt_val;
+    */
+
+    magnitude = sqrt(gx*gx + gy*gy);
+    orientation = fast_arctan_degree(gy, gx + 0.00000000000001) / 180;
+    orientation = (orientation - (int) orientation) * 180;
 
     // Step 3, calculating bin.
     bin = (int)floor(orientation * ((float)num_orientations / 180.0f));
@@ -227,18 +251,15 @@ __kernel void hist_to_blocks_3(
     int group_offset = j*n_cellsx*num_orientations + i*num_orientations;
     int id = get_local_id(0);
     
-    float val = 0.0;
+    float val;
     int block_size = by*bx*num_orientations;
-    int id_num = id % num_orientations;
-    int id_by = id / (num_orientations * bx);
-    int id_bx = (id / num_orientations) % bx;
-
+    
+    buf[id] = 0.0;
     if (id < block_size) {
-        val = hist[group_offset + id_by*n_cellsx*num_orientations
-                    + id_bx * num_orientations + id_num];
+        val = hist[group_offset +  (id / (num_orientations * bx))*n_cellsx*num_orientations
+                    + ((id / num_orientations) % bx) * num_orientations 
+                    + (id % num_orientations)];
         buf[id] = val;
-    } else {
-        buf[id] = 0.0;
     }
    
     barrier(CLK_LOCAL_MEM_FENCE);

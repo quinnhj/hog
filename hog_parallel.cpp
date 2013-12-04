@@ -89,7 +89,6 @@ void hist_to_blocks_parallel(cl_mem &hist, cl_mem &normalised_blocks, int by, in
     size |= size >> 8;
     size |= size >> 16;
     size++;
-    printf("Size: %d\n", size);
 
     size_t global_work_size[1] = {size*n_blocksx*n_blocksy};
     size_t local_work_size[1] = {size};
