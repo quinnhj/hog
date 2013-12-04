@@ -321,7 +321,7 @@ int main(int argc, char *argv[])
             break;
 
         case 3:
-            hist_to_blocks_parallel(g_hist, g_normalised_blocks, by, bx, n_blocksx, n_blocksy,
+            hist_to_blocks_parallel3(g_hist, g_normalised_blocks, by, bx, n_blocksx, n_blocksy,
                     num_orientations, n_cellsx, n_cellsy, kernel_map[block3_name_str],
                     cv.commands, cv.context);
        

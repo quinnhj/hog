@@ -235,28 +235,23 @@ __kernel void hist_to_blocks_3(
         __global float *hist,
         __global float *normalised_blocks,
         __local float *buf,
-        int by,
+        int block_size,
         int bx,
         int n_blocksx, 
-        int n_blocksy,
         int num_orientations,
-        int n_cellsx,
-        int n_cellsy)
+        int n_cellsx_num)
 {
 
-    size_t dim = get_local_size(0);
     int i = get_group_id(0) % n_blocksx;
     int j = get_group_id(0) / n_blocksx;
 
-    int group_offset = j*n_cellsx*num_orientations + i*num_orientations;
+    int group_offset = j*n_cellsx_num + i*num_orientations;
     int id = get_local_id(0);
     
     float val;
-    int block_size = by*bx*num_orientations;
-    
     buf[id] = 0.0;
     if (id < block_size) {
-        val = hist[group_offset +  (id / (num_orientations * bx))*n_cellsx*num_orientations
+        val = hist[group_offset +  (id / (num_orientations * bx))*n_cellsx_num
                     + ((id / num_orientations) % bx) * num_orientations 
                     + (id % num_orientations)];
         buf[id] = val;
@@ -265,7 +260,7 @@ __kernel void hist_to_blocks_3(
     barrier(CLK_LOCAL_MEM_FENCE);
 
     //Reduce to buf[0]
-    for (int s = dim/2; s > 0; s>>= 1) {
+    for (int s = get_local_size(0)/2; s > 0; s>>= 1) {
         if (id < s) {
             buf[id] += buf[id + s];
         }
@@ -274,7 +269,7 @@ __kernel void hist_to_blocks_3(
 
     float sum = buf[0];
     if (id < block_size) {
-        normalised_blocks[j*n_blocksx*block_size +
+        normalised_blocks[ j*n_blocksx*block_size +
                 i*block_size + id] = val / sum;
     }    
 }
