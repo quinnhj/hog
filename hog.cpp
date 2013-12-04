@@ -162,14 +162,14 @@ int main(int argc, char *argv[])
      */
     std::string kernel_source_str;
     std::string arraycompact_kernel_file =
-            std::string("radixsort.cl");
+            std::string("hog_parallel.cl");
 
     std::list<std::string> kernel_names;
     std::string hist_name_str = std::string("image_to_hist_2");
-    std::string block_name_str = std::string("hist_to_blocks_2");
+    //std::string block_name_str = std::string("hist_to_blocks_2");
 
     kernel_names.push_back(hist_name_str);
-    kernel_names.push_back(block_name_str);
+    //kernel_names.push_back(block_name_str);
 
     cl_vars_t cv;
     std::map<std::string, cl_kernel> kernel_map;
@@ -216,7 +216,8 @@ int main(int argc, char *argv[])
 
     //TS for converting to grayscale
     timestamps[2] = timestamp();
-    
+    double time_reading = 0.0;
+
     switch (version) {
         case 1:
             image_to_hist_serial(pixels, hist, width, height,
@@ -226,11 +227,16 @@ int main(int argc, char *argv[])
             image_to_hist_2(g_pixels, g_hist, width, height, cx, cy,
                     n_cellsx, n_cellsy, num_orientations, kernel_map[hist_name_str],
                     cv.commands, cv.context);
-        
+       
+            err = clFlush(cv.commands);
+            CHK_ERR(err);
+             
+            time_reading = timestamp();
             err = clEnqueueReadBuffer(cv.commands, g_hist, true, 0,
-                    sizeof(float) * n_cellsx * n_cellsy * num_orienations,
+                    sizeof(float) * n_cellsx * n_cellsy * num_orientations,
                     hist, 0, NULL, NULL);
             CHK_ERR(err);
+            time_reading = time_reading - timestamp();
         
         default:
             image_to_hist_serial(pixels, hist, width, height,
@@ -276,7 +282,7 @@ int main(int argc, char *argv[])
 
     //Print timestamping data:
     //printf("Timestamps:\n\n");
-    double total_time = timestamps[num_timestamps-1] - timestamps[0];
+    double total_time = timestamps[num_timestamps-1] - timestamps[1] - time_reading;
     printf("%f,", total_time);
     for(int i = 1; i < num_timestamps; i++) {
         printf("%f,%f,", timestamps[i] - timestamps[i-1], ((timestamps[i] - timestamps[i-1]) / total_time) * 100);

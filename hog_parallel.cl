@@ -11,7 +11,7 @@ inline void AtomicAdd(volatile __local float *source, const float operand) {
     do {
         prevVal.floatVal = *source;
         newVal.floatVal = prevVal.floatVal + operand;
-    } while (atomic_cmpxchg((volatile __global unsigned int *)source, prevVal.intVal, newVal.intVal) != prevVal.intVal);
+    } while (atomic_cmpxchg((volatile __local unsigned int *)source, prevVal.intVal, newVal.intVal) != prevVal.intVal);
 }
 
 
@@ -45,11 +45,6 @@ __kernel void image_to_hist_2(
     float magnitude;
     int bin;
 
-    /*
-    if (idx < n && gid > 0) {
-    
-    }
-    */
     
     // Step 0, initialize buf
     int id = get_local_id(0) * get_local_size(1) + get_local_id(1);
@@ -71,6 +66,7 @@ __kernel void image_to_hist_2(
         gy = 0.0;
     }
 
+
     // Step 2, calculating mag and orientation
     magnitude = sqrt(pow(gx, 2) + pow(gy, 2));
     orientation= fmod(atan2(gy, gx + 0.00000000000001)
@@ -79,11 +75,14 @@ __kernel void image_to_hist_2(
         orientation += 180;
     }
 
+
     // Step 3, calculating bin.
     bin = (int)floor(orientation * ((float)num_orientations / 180.0f));
 
+
     // Step 4, atomic add to buffer...sketch.
     AtomicAdd(&buf[bin], magnitude / (cx * cy));
+
     
     // Barrier to wait for all threads to finish calculating the bins.
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -92,20 +91,9 @@ __kernel void image_to_hist_2(
     if (id < num_orientations) {
         hist[celly*n_cellsx*num_orientations + cellx*num_orientations + id] = 
                     buf[id];
+        //hist[celly*n_cellsx*num_orientations + cellx*num_orientations + id] = (float) 0;
     }
-
-
-    /*
-    if (get_local_id(0) == 0 && get_local_id(1) == 0) {
     
-        for (int a = 0; a < num_orientations; a++) {
-            hist[celly*n_cellsx*num_orientations + cellx*num_orientations + a] = 
-                        buf[a];
-
-        }
-    }
-
-    */
 
 }
 

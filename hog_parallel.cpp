@@ -25,8 +25,7 @@ void image_to_hist_2 (cl_mem &image, cl_mem &hist, int width, int height,
                     int cx, int cy, int n_cellsx, int n_cellsy, int num_orientations,
                     cl_kernel &kernel, cl_command_queue &queue, cl_context &context) {
 
-    
-    size_t global_work_size[2] = {n_cellsy, n_cellsx};
+    size_t global_work_size[2] = {n_cellsy*cy, n_cellsx*cx};
     size_t local_work_size[2] = {cy, cx};
     
     cl_int err = CL_SUCCESS;
@@ -36,7 +35,7 @@ void image_to_hist_2 (cl_mem &image, cl_mem &hist, int width, int height,
     err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &hist);
     CHK_ERR(err);
 
-    err = clSetKernelArg(kernel, 2, num_orientations*sizeof(cl_float), NULL);
+    err = clSetKernelArg(kernel, 2, num_orientations*sizeof(float), NULL);
     CHK_ERR(err);
 
     err = clSetKernelArg(kernel, 3, sizeof(int), &width);

@@ -58,5 +58,4 @@ void compile_ocl_program(std::map<std::string, cl_kernel> &kernels,
 			 std::list<std::string> knames);
 
 void readFile(std::string& fileName, std::string &out); 
-double timestamp();
 #endif

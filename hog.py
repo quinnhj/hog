@@ -242,12 +242,13 @@ def main(argv):
 
     pic = misc.imread(inputfile, flatten=True)
 
-    ret, vis = hog(pic, visualise=True, normalise=True)
+    #ret, vis = hog(pic, visualise=True, normalise=True)
+    ret = hog(pic, visualise=False, normalise=True)
     #print ret
     #print ret.shape
 
     np.savetxt('output/py_out.txt', ret)
-    misc.imsave(outputfile, vis)
+    #misc.imsave(outputfile, vis)
 
 
 
