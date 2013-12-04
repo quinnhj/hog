@@ -32,9 +32,9 @@ void image_to_hist_serial (float *image, float *hist, int width, int height,
      * 
      * For each pixel in image:
      *
-     * 1) Calculate gx and gy based on neighbors. gx is itself minus the
-     * one to the left of it. gy is itself minus the one above it. If there is
-     * no one to the left/above, set to zero. 
+     * 1) Calculate gx and gy based on neighbors. gx is the one to the right of it
+     * minus itself. gy is the one below minus itself. If there is
+     * no one to the right/below, set to zero. 
      *
      * 2) Calculate magnitude and orientation. Magnitude is defined as:
      *      sqrtf(powf(gx, 2) + powf(gy, 2));
@@ -43,18 +43,8 @@ void image_to_hist_serial (float *image, float *hist, int width, int height,
      *
      * 3) Using orientation, calculate which "bin" it goes into. 
      *
-     * 4) Figure out which cells it belongs in. Increment those by a
+     * 4) Figure out which cell it belongs in. Increment that by a
      * "spread out" (magnitude divided by filter size) value.
-     *
-     * To figure out which cell it belongs to, know that uniform filters
-     * distribute to anything withing a square of "radius" cx and cy around
-     * it. So if we're smart, we can do mod math on the coordinates to figure
-     * them out.
-     *
-     *
-     *
-     *
-     *
      */
     
     float gx;
@@ -143,6 +133,5 @@ void hist_to_blocks_serial(float *hist, float *normalised_blocks, int by, int bx
     }
 
 }
-
 
 

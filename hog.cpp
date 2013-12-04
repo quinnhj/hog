@@ -26,9 +26,11 @@ double timestamp()
     return tv.tv_sec + 1e-6*tv.tv_usec;
 }
 
+
 float rgb_to_grayscale(pixel_t input){
     return 0.299*input.r + 0.587*input.g + 0.114*input.b;
 }
+
 
 void convert_to_pixel(pixel_t *out, frame_ptr in)
 {
@@ -46,6 +48,7 @@ void convert_to_pixel(pixel_t *out, frame_ptr in)
         }
     }
 }
+
 
 void convert_to_frame(frame_ptr out, pixel_t *in)
 {
@@ -97,11 +100,7 @@ int main(int argc, char *argv[])
         printf("need input filename\n");
         return -1;
     }
-
-    /*
-     * Declaration of timestamp constant / array
-     */
-      
+ 
     int num_timestamps = 5;
     double timestamps[num_timestamps];
     timestamps[0] = timestamp();
@@ -155,7 +154,6 @@ int main(int argc, char *argv[])
     float *normalised_blocks = new float[block_arr_size];
     bzero(normalised_blocks, sizeof(float)*block_arr_size);
 
-
     /*
      * Initializing opencl
      *
@@ -165,11 +163,15 @@ int main(int argc, char *argv[])
             std::string("hog_parallel.cl");
 
     std::list<std::string> kernel_names;
-    std::string hist_name_str = std::string("image_to_hist_2");
-    std::string block_name_str = std::string("hist_to_blocks_2");
+    std::string hist2_name_str = std::string("image_to_hist_2");
+    std::string block2_name_str = std::string("hist_to_blocks_2");
+    std::string hist3_name_str = std::string("image_to_hist_3");
+    std::string block3_name_str = std::string("hist_to_blocks_3");
 
-    kernel_names.push_back(hist_name_str);
-    kernel_names.push_back(block_name_str);
+    kernel_names.push_back(hist2_name_str);
+    kernel_names.push_back(block2_name_str);
+    kernel_names.push_back(hist3_name_str);
+    kernel_names.push_back(block3_name_str);
 
     cl_vars_t cv;
     std::map<std::string, cl_kernel> kernel_map;
@@ -200,10 +202,35 @@ int main(int argc, char *argv[])
     //Timestamp for end of setup. 
     timestamps[1] = timestamp();
 
+    /* Versions:
+     * 
+     * 1) Serial
+     *
+     * 2) First pass Parallel
+     *
+     * 3) Parallel Kernel with Approximations
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     */
+
     switch (version) {
         case 1:
             image_to_gray_serial(inPix, pixels, width, height);
             break;
+    
         default:
             image_to_gray_serial(inPix, pixels, width, height);
             break;
@@ -213,19 +240,37 @@ int main(int argc, char *argv[])
             sizeof(float)*width*height, pixels, 0, NULL, NULL);
     CHK_ERR(err);
     
-    
     //TS for converting to grayscale
     timestamps[2] = timestamp();
     double time_reading = 0.0;
 
+    //Calculate histogram
     switch (version) {
         case 1:
             image_to_hist_serial(pixels, hist, width, height,
                     cx, cy, n_cellsx, n_cellsy, num_orientations);
             break;
+   
         case 2:
-            image_to_hist_2(g_pixels, g_hist, width, height, cx, cy,
-                    n_cellsx, n_cellsy, num_orientations, kernel_map[hist_name_str],
+            image_to_hist_parallel(g_pixels, g_hist, width, height, cx, cy,
+                    n_cellsx, n_cellsy, num_orientations, kernel_map[hist2_name_str],
+                    cv.commands, cv.context);
+       
+            err = clFlush(cv.commands);
+            CHK_ERR(err);
+             
+            
+            time_reading = timestamp();
+            err = clEnqueueReadBuffer(cv.commands, g_hist, true, 0,
+                    sizeof(float) * n_cellsx * n_cellsy * num_orientations,
+                    hist, 0, NULL, NULL);
+            CHK_ERR(err);
+            time_reading = time_reading - timestamp();
+            break; 
+
+        case 3:
+            image_to_hist_parallel(g_pixels, g_hist, width, height, cx, cy,
+                    n_cellsx, n_cellsy, num_orientations, kernel_map[hist3_name_str],
                     cv.commands, cv.context);
        
             err = clFlush(cv.commands);
@@ -250,6 +295,7 @@ int main(int argc, char *argv[])
     timestamps[3] = timestamp();
     double temp = 0.0;
     
+    //Calculate normalised blocks
     switch (version) {
         case 1:
             hist_to_blocks_serial(hist, normalised_blocks, by, bx,
@@ -257,10 +303,9 @@ int main(int argc, char *argv[])
                     n_cellsy);
             break;
 
-
         case 2:
-            hist_to_blocks_2(g_hist, g_normalised_blocks, by, bx, n_blocksx, n_blocksy,
-                    num_orientations, n_cellsx, n_cellsy, kernel_map[block_name_str],
+            hist_to_blocks_parallel(g_hist, g_normalised_blocks, by, bx, n_blocksx, n_blocksy,
+                    num_orientations, n_cellsx, n_cellsy, kernel_map[block2_name_str],
                     cv.commands, cv.context);
        
             err = clFlush(cv.commands);
@@ -273,10 +318,24 @@ int main(int argc, char *argv[])
             CHK_ERR(err);
             temp = temp - timestamp();
             time_reading += temp; 
-
             break;
 
-
+        case 3:
+            hist_to_blocks_parallel(g_hist, g_normalised_blocks, by, bx, n_blocksx, n_blocksy,
+                    num_orientations, n_cellsx, n_cellsy, kernel_map[block3_name_str],
+                    cv.commands, cv.context);
+       
+            err = clFlush(cv.commands);
+            CHK_ERR(err);
+            
+            temp = timestamp(); 
+            err = clEnqueueReadBuffer(cv.commands, g_normalised_blocks, true, 0,
+                    sizeof(float) * n_blocksx * n_blocksy * bx * by *num_orientations,
+                    normalised_blocks, 0, NULL, NULL);
+            CHK_ERR(err);
+            temp = temp - timestamp();
+            time_reading += temp; 
+            break;
 
         default:
             hist_to_blocks_serial(hist, normalised_blocks, by, bx,
@@ -313,16 +372,7 @@ int main(int argc, char *argv[])
         printf("%f,%f,", timestamps[i] - timestamps[i-1], ((timestamps[i] - timestamps[i-1]) / total_time) * 100);
     }
 
-
-    /*
-    printf("Total time: %f seconds\n", total_time);
-    for (int i = 1; i < num_timestamps; i++) {
-        printf("%d: %f\n", i, timestamps[i]);
-        printf("\t%f percent\n", ((timestamps[i] - timestamps[i-1]) / total_time) * 100);
-    }
-    */
     //Free up stuff
-
     clReleaseMemObject(g_hist);
     clReleaseMemObject(g_pixels);
     clReleaseMemObject(g_normalised_blocks);
