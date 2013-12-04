@@ -91,22 +91,66 @@ __kernel void image_to_hist_2(
     if (id < num_orientations) {
         hist[celly*n_cellsx*num_orientations + cellx*num_orientations + id] = 
                     buf[id];
-        //hist[celly*n_cellsx*num_orientations + cellx*num_orientations + id] = (float) 0;
+        //hist[celly*n_cellsx*num_orientations + cellx*num_orientations + id] = (float) 111;
     }
     
 
 }
 
 
+__kernel void hist_to_blocks_2(
+        __global float *hist,
+        __global float *normalised_blocks,
+        __local float *buf,
+        int by,
+        int bx,
+        int n_blocksx, 
+        int n_blocksy,
+        int num_orientations,
+        int n_cellsx,
+        int n_cellsy)
 
 
+{
 
+    size_t dim = get_local_size(0);
 
+    int i = get_group_id(0) % n_blocksx;
+    int j = get_group_id(0) / n_blocksx;
 
+    int group_offset = j*n_cellsx*num_orientations + i*num_orientations;
+    int id = get_local_id(0);
+    
+    float val = 0.0f;
+    int block_size = by*bx*num_orientations;
+    
 
+    if (id < block_size) {
+        val = hist[group_offset + id];
+        buf[id] = val;
+    } else {
+        buf[id] = 0.0f;
+    }
+   
+    barrier(CLK_LOCAL_MEM_FENCE);
 
+    for (int s = dim/2; s > 0; s>>= 1) {
+        if (id < s) {
+            buf[id] += buf[id + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
 
+    float sum = buf[0];
 
+    if (id < block_size) {
+        normalised_blocks[j*n_blocksx*block_size +
+                i*block_size + id] = val / sum;
+    }    
+
+   
+
+}
 
 
 

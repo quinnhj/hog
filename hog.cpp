@@ -166,10 +166,10 @@ int main(int argc, char *argv[])
 
     std::list<std::string> kernel_names;
     std::string hist_name_str = std::string("image_to_hist_2");
-    //std::string block_name_str = std::string("hist_to_blocks_2");
+    std::string block_name_str = std::string("hist_to_blocks_2");
 
     kernel_names.push_back(hist_name_str);
-    //kernel_names.push_back(block_name_str);
+    kernel_names.push_back(block_name_str);
 
     cl_vars_t cv;
     std::map<std::string, cl_kernel> kernel_map;
@@ -194,13 +194,8 @@ int main(int argc, char *argv[])
             sizeof(float)*block_arr_size, NULL, &err);
     CHK_ERR(err);
 
-    err = clEnqueueWriteBuffer(cv.commands, g_pixels, true, 0,
-            sizeof(float)*width*height, pixels, 0, NULL, NULL);
-    CHK_ERR(err);
-
     size_t global_work_size[2] = {n_cellsy, n_cellsx};
     size_t local_work_size[2] = {cy, cx};
-
 
     //Timestamp for end of setup. 
     timestamps[1] = timestamp();
@@ -214,6 +209,11 @@ int main(int argc, char *argv[])
             break;
     }
 
+    err = clEnqueueWriteBuffer(cv.commands, g_pixels, true, 0,
+            sizeof(float)*width*height, pixels, 0, NULL, NULL);
+    CHK_ERR(err);
+    
+    
     //TS for converting to grayscale
     timestamps[2] = timestamp();
     double time_reading = 0.0;
@@ -231,13 +231,15 @@ int main(int argc, char *argv[])
             err = clFlush(cv.commands);
             CHK_ERR(err);
              
+            
             time_reading = timestamp();
             err = clEnqueueReadBuffer(cv.commands, g_hist, true, 0,
                     sizeof(float) * n_cellsx * n_cellsy * num_orientations,
                     hist, 0, NULL, NULL);
             CHK_ERR(err);
             time_reading = time_reading - timestamp();
-        
+            break; 
+
         default:
             image_to_hist_serial(pixels, hist, width, height,
                     cx, cy, n_cellsx, n_cellsy, num_orientations);
@@ -246,6 +248,7 @@ int main(int argc, char *argv[])
 
     // TS for finished histogram
     timestamps[3] = timestamp();
+    double temp = 0.0;
     
     switch (version) {
         case 1:
@@ -253,6 +256,28 @@ int main(int argc, char *argv[])
                     n_blocksx, n_blocksy, num_orientations,n_cellsx,
                     n_cellsy);
             break;
+
+
+        case 2:
+            hist_to_blocks_2(g_hist, g_normalised_blocks, by, bx, n_blocksx, n_blocksy,
+                    num_orientations, n_cellsx, n_cellsy, kernel_map[block_name_str],
+                    cv.commands, cv.context);
+       
+            err = clFlush(cv.commands);
+            CHK_ERR(err);
+            
+            temp = timestamp(); 
+            err = clEnqueueReadBuffer(cv.commands, g_normalised_blocks, true, 0,
+                    sizeof(float) * n_blocksx * n_blocksy * bx * by *num_orientations,
+                    normalised_blocks, 0, NULL, NULL);
+            CHK_ERR(err);
+            temp = temp - timestamp();
+            time_reading += temp; 
+
+            break;
+
+
+
         default:
             hist_to_blocks_serial(hist, normalised_blocks, by, bx,
                     n_blocksx, n_blocksy, num_orientations,n_cellsx,
@@ -282,7 +307,7 @@ int main(int argc, char *argv[])
 
     //Print timestamping data:
     //printf("Timestamps:\n\n");
-    double total_time = timestamps[num_timestamps-1] - timestamps[1] - time_reading;
+    double total_time = timestamps[num_timestamps-1] - timestamps[2] - time_reading;
     printf("%f,", total_time);
     for(int i = 1; i < num_timestamps; i++) {
         printf("%f,%f,", timestamps[i] - timestamps[i-1], ((timestamps[i] - timestamps[i-1]) / total_time) * 100);
