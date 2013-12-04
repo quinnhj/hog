@@ -204,14 +204,21 @@ int main(int argc, char *argv[])
     file.close();
 
     //Print timestamping data:
-    printf("Timestamps:\n\n");
+    //printf("Timestamps:\n\n");
     double total_time = timestamps[num_timestamps-1] - timestamps[0];
+    printf("%f,", total_time);
+    for(int i = 1; i < num_timestamps; i++) {
+        printf("%f,%f,", timestamps[i] - timestamps[i-1], ((timestamps[i] - timestamps[i-1]) / total_time) * 100);
+    }
+
+
+    /*
     printf("Total time: %f seconds\n", total_time);
     for (int i = 1; i < num_timestamps; i++) {
         printf("%d: %f\n", i, timestamps[i]);
         printf("\t%f percent\n", ((timestamps[i] - timestamps[i-1]) / total_time) * 100);
     }
-
+    */
     //Free up stuff
     destroy_frame(frame);
     delete [] inPix; 

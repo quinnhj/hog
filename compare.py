@@ -28,7 +28,7 @@ with open ('output/compare_results.txt', 'w') as out:
                     if pct_dif > THRESHOLD and dif > 0.001:
                         if not seen:
                             seen = True
-                            print 'Error at ' + str(index)
+#print 'Error at ' + str(index)
                             
                         count += 1  
 
