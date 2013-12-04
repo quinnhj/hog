@@ -121,15 +121,21 @@ __kernel void hist_to_blocks_2(
     int group_offset = j*n_cellsx*num_orientations + i*num_orientations;
     int id = get_local_id(0);
     
-    float val = 0.0f;
+    float val = 0.0;
     int block_size = by*bx*num_orientations;
-    
+    int id_num = id % num_orientations;
+    int id_by = id / (num_orientations * bx);
+    int id_bx = (id / num_orientations) % bx;
 
     if (id < block_size) {
-        val = hist[group_offset + id];
+
+        //val = hist[group_offset + id];
+        val = hist[group_offset + id_by*n_cellsx*num_orientations
+                    + id_bx * num_orientations + id_num];
+
         buf[id] = val;
     } else {
-        buf[id] = 0.0f;
+        buf[id] = 0.0;
     }
    
     barrier(CLK_LOCAL_MEM_FENCE);
