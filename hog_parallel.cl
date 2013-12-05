@@ -24,7 +24,7 @@ inline float fast_arctan_degree (float y, float x) {
     if (tmp < 1.0f ) {
         angle = (z/(1.0f + 0.28f*z*z)) * ONEEIGHTY_PI;
     } else {
-        angle += (HALF_PI - z/(z*z + 0.28f)) * ONEEIGHTY_PI;
+        angle = (HALF_PI - z/(z*z + 0.28f)) * ONEEIGHTY_PI;
     }
     return angle + 360;
 }
@@ -302,13 +302,8 @@ __kernel void image_to_hist_4(
     }
 
     int size = cx * cy;
-    int gx1 = ((j/cy)*n_cellsx + ((i+1)/cx)) * size +
-                (j % cy)*cx + ((i+1) % cx);
-    int gy1 = (((j+1)/cy)*n_cellsx + (i/cx)) * size +
-                ((j+1) % cy)*cx + (i % cx);
     int gmin = ((j/cy)*n_cellsx + (i/cx)) * size +
                 (j % cy)*cx + (i % cx);
-
 
     // Step 1, calculating gx and gy
     if (i != width - 1) {
