@@ -53,10 +53,11 @@ for FILE in $(ls input); do
     print str(get_num_pixels(os.environ['PATHNAME']))
     ")
 
+    PIXELS=$(wc -l output/py_out.txt | cut -f 1 -d " ")
     PERCENT=$(expr $FAIL \* 100)
     PERCENT=$(expr $PERCENT / $PIXELS)
 
-    if [ $PERCENT != 0 ]; then
+    if [ $PERCENT -gt 5 ]; then
         FAILED=$(expr $FAILED + 1)
         FAILED_TESTS=$FAILED_TESTS" $FILE"
         FILE=$(echo $FILE | cut -d"." -f1)

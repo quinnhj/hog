@@ -19,6 +19,30 @@
 #include "readjpeg.h"
 using namespace std;
 
+void image_to_gray_parallel(pixel_t *inPix, float *pixels, int width, int height,
+                    int cx, int cy, int n_cellsx, int n_cellsy) {
+    int loc;
+    int celli;
+    int cellj;
+    int overi;
+    int overj;
+    int size = cy*cx;
+    
+    #pragma omp parallel for
+    for (int i = 0; i < width; i++) {
+        for (int j = 0; j < height; j++) {
+            celli = i/cx;
+            cellj = j/cy;
+            overi = i % cx;
+            overj = j % cy;
+
+            loc = ((cellj*n_cellsx + celli) * size) + overj*cx + overi;
+            pixels[loc] = sqrtf(rgb_to_grayscale(inPix[j*width + i]));
+        }
+    }
+}
+
+
 void image_to_hist_parallel (cl_mem &image, cl_mem &hist, int width, int height,
                     int cx, int cy, int n_cellsx, int n_cellsy, int num_orientations,
                     cl_kernel &kernel, cl_command_queue &queue, cl_context &context) {
