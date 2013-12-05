@@ -382,6 +382,160 @@ __kernel void hist_to_blocks_4(
 }
 
 
+/*****************************************************************************
+ * Version 5
+ ****************************************************************************/
+
+__kernel void image_to_hist_5(
+        __global float *image,
+        __global float *hist,
+        __local float *buf,
+        int width,
+        int height,
+        int cx, 
+        int cy,
+        int n_cellsx,
+        int n_cellsy,
+        int num_orientations,
+        int by)
+
+{
+    int cellx = get_group_id(1);
+    int celly = get_group_id(0);
+    size_t i = get_global_id(1);
+    size_t j = get_global_id(0);
+
+    float gx = 0.0;
+    float gy = 0.0;
+    float orientation;
+    float magnitude;
+    int bin;
+    
+    // Step 0, initialize buf
+    int id = get_local_id(0) * get_local_size(1) + get_local_id(1);
+    if (id < num_orientations) {
+        buf[id] = 0;
+    }
+
+    int size = cx * cy;
+    int gmin = ((j/cy)*n_cellsx + (i/cx)) * size +
+                (j % cy)*cx + (i % cx);
+
+    // Step 1, calculating gx and gy
+    if (i != width - 1) {
+        gx = image[((j/cy)*n_cellsx + ((i+1)/cx)) * size +
+                (j % cy)*cx + ((i+1) % cx)] - image[gmin];
+    }
+
+    if (j != height - 1) {
+        gy = image[(((j+1)/cy)*n_cellsx + (i/cx)) * size +
+                ((j+1) % cy)*cx + (i % cx)] - image[gmin];
+    }
+
+    
+    // Step 2, calculating mag and orientation
+    magnitude = sqrt(gx*gx + gy*gy);
+    orientation = fast_arctan_degree(gy, gx + 0.00000000000001) / 180;
+    orientation = (orientation - (int) orientation) * 180;
+
+    // Step 3, calculating bin.
+    bin = (int)floor(orientation * ((float)num_orientations / 180.0f));
+
+    // Step 4, atomic add to buffer...sketch.
+    AtomicAdd(&buf[bin], magnitude / (cx * cy));
+
+    // Barrier to wait for all threads to finish calculating the bins.
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+
+    if (id < num_orientations) {
+        
+        int loc = (j/by) * n_cellsx * by * num_orientations
+                + i * num_orientations * by + num_orientations * (j % by) + id;
+        
+        if (n_cellsy - j < by) {
+            loc = (j/by) * n_cellsx * (n_cellsy % by) * num_orientations
+                + i * num_orientations * (n_cellsy % by) + num_orientations 
+                * (j % (n_cellsy % by)) + id;
+        }
+        hist[loc] = buf[id];
+
+    }
+  
+  
+  
+   
+    /*
+    if (id < num_orientations) {
+        hist[celly*n_cellsx*num_orientations + cellx*num_orientations + id] = 
+                    buf[id];
+    }
+    */
+
+}
+
+
+__kernel void hist_to_blocks_5(
+        __global float *hist,
+        __global float *normalised_blocks,
+        __local float *buf,
+        int block_size,
+        int bx,
+        int by,
+        int n_blocksx, 
+        int num_orientations,
+        int n_cellsx_num)
+{
+
+    int i = get_group_id(0) % n_blocksx;
+    int j = get_group_id(0) / n_blocksx;
+
+    //int group_offset = j*n_cellsx_num + i*num_orientations;
+    int group_offset = (j/by) * n_cellsx_num * by + i*num_orientations*by
+                + num_orientations * (j % by);
+
+    int id = get_local_id(0);
+    
+    float val;
+    buf[id] = 0.0;
+    if (id < block_size) {
+     
+        /*
+        val = hist[group_offset +  (id / (num_orientations * bx))*n_cellsx_num
+                    + ((id / num_orientations) % bx) * num_orientations 
+                    + (id % num_orientations)];
+        */
+        //val = hist[group_offset + id]
+        val = hist[group_offset + (id / (num_orientations * bx)) *num_orientations
+                    + ((id / num_orientations) % bx) * num_orientations*by
+                    + (id % num_orientations)];
+
+        buf[id] = val;
+    }
+   
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    //Reduce to buf[0]
+    for (int s = get_local_size(0)/2; s > 0; s>>= 1) {
+        if (id < s) {
+            buf[id] += buf[id + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+
+    float sum = buf[0];
+    if (id < block_size) {
+        normalised_blocks[ j*n_blocksx*block_size +
+                i*block_size + id] = val / sum;
+    }    
+
+    
+
+
+}
+
+
+
 
 
 

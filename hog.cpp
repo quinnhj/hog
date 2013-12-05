@@ -169,6 +169,8 @@ int main(int argc, char *argv[])
     std::string block3_name_str = std::string("hist_to_blocks_3");
     std::string hist4_name_str = std::string("image_to_hist_4");
     std::string block4_name_str = std::string("hist_to_blocks_4");
+    std::string hist5_name_str = std::string("image_to_hist_5");
+    std::string block5_name_str = std::string("hist_to_blocks_5");
 
     kernel_names.push_back(hist2_name_str);
     kernel_names.push_back(block2_name_str);
@@ -176,6 +178,8 @@ int main(int argc, char *argv[])
     kernel_names.push_back(block3_name_str);
     kernel_names.push_back(hist4_name_str);
     kernel_names.push_back(block4_name_str);
+    kernel_names.push_back(hist5_name_str);
+    kernel_names.push_back(block5_name_str);
 
     cl_vars_t cv;
     std::map<std::string, cl_kernel> kernel_map;
@@ -219,6 +223,11 @@ int main(int argc, char *argv[])
 
     switch (version) {
         case 4:
+            image_to_gray_parallel(inPix, pixels, width, height,
+                        cx, cy, n_cellsx, n_cellsy);
+            break;
+   
+       case 5:
             image_to_gray_parallel(inPix, pixels, width, height,
                         cx, cy, n_cellsx, n_cellsy);
             break;
@@ -280,6 +289,23 @@ int main(int argc, char *argv[])
         case 4:
             image_to_hist_parallel(g_pixels, g_hist, width, height, cx, cy,
                     n_cellsx, n_cellsy, num_orientations, kernel_map[hist4_name_str],
+                    cv.commands, cv.context);
+       
+            err = clFlush(cv.commands);
+            CHK_ERR(err);
+             
+            
+            time_reading = timestamp();
+            err = clEnqueueReadBuffer(cv.commands, g_hist, true, 0,
+                    sizeof(float) * n_cellsx * n_cellsy * num_orientations,
+                    hist, 0, NULL, NULL);
+            CHK_ERR(err);
+            time_reading = time_reading - timestamp();
+            break; 
+        
+        case 5:
+            image_to_hist_parallel5(g_pixels, g_hist, width, height, cx, cy,
+                    n_cellsx, n_cellsy, num_orientations, by, kernel_map[hist5_name_str],
                     cv.commands, cv.context);
        
             err = clFlush(cv.commands);
@@ -362,7 +388,23 @@ int main(int argc, char *argv[])
             temp = temp - timestamp();
             time_reading += temp; 
             break;
-
+        
+        case 5:
+            hist_to_blocks_parallel5(g_hist, g_normalised_blocks, by, bx, n_blocksx, n_blocksy,
+                    num_orientations, n_cellsx, n_cellsy, kernel_map[block5_name_str],
+                    cv.commands, cv.context);
+       
+            err = clFlush(cv.commands);
+            CHK_ERR(err);
+            
+            temp = timestamp(); 
+            err = clEnqueueReadBuffer(cv.commands, g_normalised_blocks, true, 0,
+                    sizeof(float) * n_blocksx * n_blocksy * bx * by *num_orientations,
+                    normalised_blocks, 0, NULL, NULL);
+            CHK_ERR(err);
+            temp = temp - timestamp();
+            time_reading += temp; 
+            break;
 
         default:
             hist_to_blocks_serial(hist, normalised_blocks, by, bx,
