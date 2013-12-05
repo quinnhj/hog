@@ -437,7 +437,7 @@ int main(int argc, char *argv[])
     //printf("Timestamps:\n\n");
     double total_time = timestamps[num_timestamps-1] - timestamps[2] - time_reading;
     printf("%f,", total_time);
-    for(int i = 1; i < num_timestamps; i++) {
+    for(int i = 3; i < num_timestamps; i++) {
         printf("%f,%f,", timestamps[i] - timestamps[i-1], ((timestamps[i] - timestamps[i-1]) / total_time) * 100);
     }
 

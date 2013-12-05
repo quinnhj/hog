@@ -14,8 +14,8 @@ mkdir -p log/failures
 
 make
 
-echo "Test,Compare,Total,Time #1,Percent #1,Time #2,Percent #2,Time #3,Percent #3,Time #4,Percent #4" > log/hog_out.log
-echo "Test,Compare,Total,Time #1,Percent #1,Time #2,Percent #2,Time #3,Percent #3,Time #4,Percent #4" > log/hog_hist.log
+echo "Test,Compare,Time #3,Percent #3,Time #4,Percent #4" > log/hog_out.log
+echo "Test,Compare,Time #3,Percent #3,Time #4,Percent #4" > log/hog_hist.log
 
 chmod 766 log/*
 
